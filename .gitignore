@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+*.egg
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Environment
+.env
+.env.*
+*.env
+
+# Data — never commit real or partner data
+data/raw/
+data/processed/
+data/partner/
+*.csv
+*.parquet
+*.xlsx
+*.json
+!data/synthetic/.gitkeep
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# dbt
+target/
+dbt_packages/
+logs/
+
+# macOS
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Docker
+docker-compose.override.yml
+
+# Secrets
+*.pem
+*.key
+secrets/
