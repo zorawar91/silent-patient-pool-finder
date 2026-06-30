@@ -57,7 +57,7 @@ output:
     - htn_risk_score
     - hyperthyroidism_risk_score
     - top_signal
-    - estimated_undiagnosed_pool
+    - total_estimated_pool
 
 compliance:
   # Data handling rules enforced at ingestion
