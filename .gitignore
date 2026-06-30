@@ -36,3 +36,4 @@ data/scored/
 # Secrets / env
 .env
 *.key
+.streamlit/secrets.toml

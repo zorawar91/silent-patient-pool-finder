@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Silent Patient Pool Finder — Pipeline Orchestrator
 ===================================================
@@ -8,6 +9,7 @@ Usage:
     python run.py --country us           # Explicit country
     python run.py --skip-data            # Skip data generation (use existing)
     python run.py --skip-train           # Skip training (use existing models)
+    python run.py --db                   # Write all outputs to Neon after scoring
     python run.py --dashboard            # Launch dashboard after scoring
 
 Steps:
@@ -15,7 +17,8 @@ Steps:
     2. Compute feature signals (M2)
     3. Train XGBoost scoring models (M3)
     4. Score all counties → Geography Risk Score (M3)
-    5. Launch Streamlit dashboard (M4) — optional
+    5. Write to Neon DB (optional, --db)
+    6. Launch Streamlit dashboard (M4, optional, --dashboard)
 """
 
 import argparse
@@ -43,6 +46,7 @@ def run_pipeline(
     country: str = "us",
     skip_data: bool = False,
     skip_train: bool = False,
+    write_db: bool = False,
     launch_dashboard: bool = False,
 ):
     country_config = f"config/{country}.yaml"
@@ -57,7 +61,7 @@ def run_pipeline(
             log.error(f"Config not found: {path}")
             sys.exit(1)
 
-    total_steps = 4 + (1 if launch_dashboard else 0)
+    total_steps = 4 + (1 if write_db else 0) + (1 if launch_dashboard else 0)
 
     # ------------------------------------------------------------------
     # Step 1: Synthetic Data Generation
@@ -129,17 +133,37 @@ def run_pipeline(
     log.info(f"  Full scores:          {scored_dir}/scores.parquet")
     log.info("=" * 60)
 
-    # Top 10 preview
-    score_col = "overall_risk_score"
     preview = scores[["county_name", "state_name", "overall_risk_score",
                        "total_estimated_pool"]].head(10)
     log.info(f"\nTop 10 opportunity counties:\n{preview.to_string(index=False)}")
 
     # ------------------------------------------------------------------
-    # Step 5: Dashboard (optional)
+    # Step 5: Write to Neon (optional)
+    # ------------------------------------------------------------------
+    if write_db:
+        step_n = 5
+        banner("Writing All Data to Neon (PostgreSQL)", step_n, total_steps)
+        t0 = time.time()
+        from src.db.connection import get_engine
+        from src.db.writer import write_all_to_db
+
+        engine = get_engine()
+        if engine is None:
+            log.error(
+                "No database URL found. Set NEON_DATABASE_URL in your environment "
+                "or in .streamlit/secrets.toml before running --db."
+            )
+            sys.exit(1)
+
+        write_all_to_db(engine, data_dir=data_dir, scored_dir=scored_dir)
+        log.info(f"✓ Neon write complete ({time.time()-t0:.1f}s)")
+
+    # ------------------------------------------------------------------
+    # Step 6: Dashboard (optional)
     # ------------------------------------------------------------------
     if launch_dashboard:
-        banner("Launching Streamlit Dashboard", 5, total_steps)
+        step_n = total_steps
+        banner("Launching Streamlit Dashboard", step_n, total_steps)
         log.info("Dashboard: http://localhost:8501")
         subprocess.run(
             [sys.executable, "-m", "streamlit", "run", "src/output/dashboard.py"],
@@ -164,6 +188,10 @@ def main():
         help="Skip model training (use existing models)"
     )
     parser.add_argument(
+        "--db", action="store_true",
+        help="Write all pipeline outputs to Neon after scoring"
+    )
+    parser.add_argument(
         "--dashboard", action="store_true",
         help="Launch Streamlit dashboard after pipeline completes"
     )
@@ -173,6 +201,7 @@ def main():
         country=args.country,
         skip_data=args.skip_data,
         skip_train=args.skip_train,
+        write_db=args.db,
         launch_dashboard=args.dashboard,
     )
 

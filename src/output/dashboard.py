@@ -9,7 +9,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from pathlib import Path
-import json, urllib.request
+import json, urllib.request, os
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -114,8 +114,38 @@ st.markdown(f"""<style>
 
 
 # ── Data ──────────────────────────────────────────────────────────────────────
+def _get_neon_engine():
+    """Return a SQLAlchemy engine if a Neon DB URL is configured, else None."""
+    url = None
+    try:
+        url = st.secrets.get("NEON_DATABASE_URL")
+    except Exception:
+        pass
+    if not url:
+        url = os.environ.get("NEON_DATABASE_URL") or os.environ.get("DATABASE_URL")
+    if not url:
+        return None
+    try:
+        from sqlalchemy import create_engine
+        if "sslmode" not in url:
+            sep = "&" if "?" in url else "?"
+            url = f"{url}{sep}sslmode=require"
+        return create_engine(url, pool_pre_ping=True)
+    except Exception:
+        return None
+
+
 @st.cache_data
 def load_data():
+    engine = _get_neon_engine()
+    if engine:
+        scores      = pd.read_sql("SELECT * FROM scores ORDER BY overall_risk_score DESC", engine)
+        scores_long = pd.read_sql("SELECT * FROM scores_long", engine)
+        return scores, scores_long
+    # Fallback: local parquet (local dev without DB)
+    if not Path("data/scored/scores.parquet").exists():
+        st.error("No data found. Run `python3 run.py` first (add `--db` to also push to Neon).")
+        st.stop()
     scores      = pd.read_parquet("data/scored/scores.parquet")
     scores_long = pd.read_parquet("data/scored/scores_long.parquet")
     return scores, scores_long
@@ -537,10 +567,6 @@ def view_opportunity_planner(scores, scores_long, condition, state, top_n, inter
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
-    if not Path("data/scored/scores.parquet").exists():
-        st.error("No data found. Run `python3 run.py` first.")
-        st.stop()
-
     scores, scores_long = load_data()
     geojson = load_geojson()
     ctrl    = render_sidebar(scores)
