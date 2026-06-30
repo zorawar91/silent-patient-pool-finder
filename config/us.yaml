@@ -1,0 +1,67 @@
+# United States country configuration
+# Swap this file for another country's config to re-run the engine on a different market.
+
+country:
+  name: "United States"
+  code: "US"
+  # Geographic grain: county (FIPS code) is the standard unit for US public health data
+  geo_grain: "county"
+  geo_id_field: "county_fips"
+  geo_name_field: "county_name"
+  geo_state_field: "state_fips"
+  population_field: "population"
+
+data:
+  # Active conditions for this run
+  active_conditions: ["t2d", "htn", "hyperthyroidism"]
+  # Path to generated synthetic data (relative to project root)
+  synthetic_output_dir: "data/synthetic"
+  # Path where scored outputs are saved
+  scored_output_dir: "data/scored"
+
+signals:
+  # Weight of each signal type in the composite Geography Risk Score
+  # Must sum to 1.0 — tune per country based on data availability
+  otc_proxy_weight: 0.30
+  diagnostic_orphan_weight: 0.35
+  hcp_symptom_weight: 0.20
+  geo_burden_weight: 0.15
+
+model:
+  # Risk score scaling: output is always 0-100 regardless of country
+  score_min: 0
+  score_max: 100
+  # Spatial cross-validation: hold out by state
+  cv_strategy: "spatial_by_state"
+  cv_folds: 5
+  # XGBoost hyperparameters (prototype defaults)
+  xgb_params:
+    n_estimators: 300
+    max_depth: 5
+    learning_rate: 0.05
+    subsample: 0.8
+    colsample_bytree: 0.8
+    random_state: 42
+
+output:
+  # Number of top opportunity geographies to surface in the dashboard
+  top_n_counties: 50
+  # Columns to include in the exported opportunity table
+  export_columns:
+    - county_fips
+    - county_name
+    - state_name
+    - population
+    - overall_risk_score
+    - t2d_risk_score
+    - htn_risk_score
+    - hyperthyroidism_risk_score
+    - top_signal
+    - estimated_undiagnosed_pool
+
+compliance:
+  # Data handling rules enforced at ingestion
+  min_aggregation_level: "county"   # Never go below county grain
+  suppress_small_counts: true
+  small_count_threshold: 10         # Suppress any count < 10 per cell
+  no_individual_identifiers: true
