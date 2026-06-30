@@ -50,3 +50,7 @@ docker-compose.override.yml
 *.pem
 *.key
 secrets/
+data/
+__pycache__/
+*.pyc
+*.joblib
