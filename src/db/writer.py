@@ -25,8 +25,9 @@ SYNTHETIC_TABLES = {
 }
 
 SCORED_TABLES = {
-    "scores":      ("scored", "scores.parquet"),
-    "scores_long": ("scored", "scores_long.parquet"),
+    "scores":            ("scored", "scores.parquet"),
+    "scores_long":       ("scored", "scores_long.parquet"),
+    "dimension_scores":  ("scored", "dimension_scores.parquet"),
 }
 
 

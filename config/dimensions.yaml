@@ -1,0 +1,217 @@
+# Silent Patient Pool Finder — 7-Dimension Scoring Framework
+# Each dimension answers a distinct strategic question for market access planning.
+# Weights sum to 1.0 — tunable per condition and country.
+
+dimensions:
+
+  disease_burden:
+    label: "Disease Burden"
+    short: "Burden"
+    weight: 0.20
+    description: >
+      How large is the total disease problem in this geography?
+      Combines prevalence estimates, complication rates, and comorbidity co-occurrence.
+    strategic_question: "How big is the undiagnosed opportunity here?"
+    color: "#E76F51"
+    icon: "🧬"
+    data_sources:
+      - cdc_places           # Chronic disease prevalence at county level
+      - cms_chronic          # Medicare chronic condition rates
+      - cms_hospitalizations # ER/inpatient for uncontrolled disease
+    features:
+      - estimated_prevalence_rate
+      - obesity_rate
+      - comorbidity_index      # co-occurrence of T2D risk factors
+      - hospitalization_rate   # for diabetic complications
+
+  diagnosis_gap:
+    label: "Diagnosis Gap"
+    short: "Gap"
+    weight: 0.25
+    description: >
+      What fraction of the disease burden is undiagnosed or untreated?
+      This is the core signal — the gap between true prevalence and treated population.
+    strategic_question: "How many silent patients are here?"
+    color: "#E63946"
+    icon: "🔍"
+    data_sources:
+      - cms_part_d           # County-level Rx utilization
+      - cms_part_b           # Lab orders without follow-up Rx (diagnostic orphan)
+      - cdc_places           # Diagnosed vs. estimated prevalence
+    features:
+      - treatment_penetration_rate   # Rx fills / estimated prevalent population
+      - diagnostic_orphan_ratio      # Labs ordered without follow-up chronic Rx
+      - undiagnosed_rate_estimate    # 1 - treatment_penetration
+      - er_visit_rate_uncontrolled   # ER for DKA, hypertensive crisis = late presentation
+
+  access_to_care:
+    label: "Access to Care"
+    short: "Access"
+    weight: 0.15
+    description: >
+      Can a screened patient actually get diagnosed and treated here?
+      Low access means a screening program will identify patients but fail to convert them.
+    strategic_question: "Does the infrastructure exist to act on what we find?"
+    color: "#2A9D8F"
+    icon: "🏥"
+    data_sources:
+      - hrsa_ahrf            # HCP density, shortage area designations
+      - cms_part_b           # Lab and diagnostic service utilization
+    features:
+      - pcp_per_1000
+      - specialist_per_1000  # Endocrinologists, cardiologists
+      - fqhc_present         # Federally Qualified Health Center in county
+      - hpsa_designation     # Health Professional Shortage Area flag
+      - pharmacy_per_1000
+      - uninsured_rate
+
+  social_determinants:
+    label: "Social Determinants"
+    short: "SDoH"
+    weight: 0.15
+    description: >
+      Why does the gap exist? Social factors that drive undiagnosis —
+      poverty, food access, education, housing instability.
+    strategic_question: "What's causing the gap — and what type of program will work?"
+    color: "#F4A261"
+    icon: "🏘️"
+    data_sources:
+      - census_acs           # Poverty, income, education, insurance, race/ethnicity
+      - usda_food_atlas      # Food desert / food swamp designations
+      - county_health_rankings  # RWJ composite SDoH scores
+    features:
+      - poverty_rate
+      - food_desert_flag
+      - median_household_income
+      - high_school_graduation_rate
+      - uninsured_rate
+      - racial_risk_index    # weighted risk from demographic composition (T2D risk by race)
+      - social_deprivation_index
+
+  payer_landscape:
+    label: "Payer Landscape"
+    short: "Payer"
+    weight: 0.10
+    description: >
+      Who insures the undiagnosed population, and what are their incentives?
+      Determines which payer to pitch and what program structure they will fund.
+    strategic_question: "Who pays for the solution — and why would they say yes?"
+    color: "#457B9D"
+    icon: "💳"
+    data_sources:
+      - cms_ma_penetration   # Medicare Advantage plan penetration by county
+      - census_acs           # Insurance type breakdown
+      - cms_chronic          # Medicare FFS vs MA split
+    features:
+      - medicare_advantage_rate
+      - medicaid_rate
+      - commercial_rate
+      - uninsured_rate
+      - ma_stars_gap         # Proxy: counties with high MA but low quality scores
+      - dual_eligible_rate   # Medicare + Medicaid = highest-need population
+
+  commercial_readiness:
+    label: "Commercial Readiness"
+    short: "Readiness"
+    weight: 0.10
+    description: >
+      Can a program actually launch and scale here?
+      Pharmacy density, digital access, health system affiliation, ACO presence.
+    strategic_question: "How hard is it to run a program here?"
+    color: "#8338EC"
+    icon: "🚀"
+    data_sources:
+      - hrsa_ahrf            # Health system and hospital data
+      - census_acs           # Broadband access, urbanicity
+      - cms_part_d           # Pharmacy type and density
+    features:
+      - retail_pharmacy_density
+      - broadband_access_rate
+      - urban_rural_code
+      - aco_presence         # ACO or value-based care infrastructure
+      - health_system_affiliation
+      - otc_proxy_score      # From synthetic/scanner data layer
+
+  trajectory:
+    label: "Trajectory"
+    short: "Trend"
+    weight: 0.05
+    description: >
+      Is the opportunity growing or shrinking? Multi-year trend in gap size,
+      demographic shifts, and forward projection to 2028.
+    strategic_question: "Is this market getting better or worse — and when should we move?"
+    color: "#06D6A0"
+    icon: "📈"
+    data_sources:
+      - cdc_places           # Multi-year prevalence trend
+      - cms_part_d           # Rx trend year-over-year
+      - census_acs           # Demographic shift (aging, immigration)
+    features:
+      - prevalence_trend_3yr     # Change in estimated prevalence 2020→2023
+      - treatment_trend_3yr      # Change in Rx penetration 2020→2023
+      - gap_trend_direction      # +1 widening, -1 narrowing, 0 stable
+      - population_growth_rate
+      - aging_index              # % population 55+ growing (future T2D burden)
+
+
+# Composite opportunity score = weighted sum of all 7 dimension scores
+# Each dimension score is normalized 0-100 before weighting
+composite:
+  formula: "weighted_sum"
+  output_range: [0, 100]
+  high_opportunity_threshold: 70
+  medium_opportunity_threshold: 40
+
+
+# Intervention recommendation logic
+# Maps dimension profile to recommended program type
+interventions:
+  payer_partnership:
+    label: "Payer Partnership Program"
+    icon: "🤝"
+    color: "#457B9D"
+    trigger: "payer_landscape >= 65 AND medicare_advantage_rate >= 0.35"
+    description: >
+      Pitch to Medicare Advantage or Medicaid MCO — plan has quality metric
+      incentives (Stars, HEDIS) to fund patient identification programs.
+    pitch: "Closing this care gap improves your Stars score and reduces complication costs."
+
+  pharmacy_screening:
+    label: "Pharmacy-Based Screening"
+    icon: "💊"
+    color: "#8338EC"
+    trigger: "commercial_readiness >= 60 AND otc_proxy_score >= 0.55"
+    description: >
+      Partner with retail pharmacy chains (CVS, Walgreens) for in-store
+      screening. High OTC signal means patients are already there.
+    pitch: "Your customers are already buying glucose monitors here — meet them at the counter."
+
+  community_health_screening:
+    label: "Community Health Center Partnership"
+    icon: "🏥"
+    color: "#E63946"
+    trigger: "social_determinants >= 65 AND access_to_care <= 45"
+    description: >
+      FQHC or community health center partnership for underserved counties.
+      Deepest unmet need, hardest to convert, highest social impact.
+    pitch: "This community has the highest burden and the least access — a grant-funded FQHC partnership is the only viable path."
+
+  employer_wellness:
+    label: "Employer Wellness Program"
+    icon: "🏢"
+    color: "#F4A261"
+    trigger: "commercial_rate >= 0.55 AND urban_rural_code <= 3"
+    description: >
+      Target large self-insured employers in suburban commercially-insured
+      counties. Employers pay directly for outcomes and ROI is measurable.
+    pitch: "Your workforce has a 28% undiagnosed T2D rate — a targeted wellness program pays for itself in reduced absenteeism."
+
+  digital_health_program:
+    label: "Digital Health Outreach"
+    icon: "📱"
+    color: "#06D6A0"
+    trigger: "broadband_access_rate >= 0.75 AND commercial_rate >= 0.45"
+    description: >
+      Telehealth or app-based screening and navigation for digitally-ready
+      markets. CGM-connected programs for high-risk identification.
+    pitch: "80% broadband penetration and high commercial coverage — a digital-first program scales cost-effectively here."
