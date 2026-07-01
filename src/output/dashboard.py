@@ -322,6 +322,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame):
         score_col = f"{ckey}_risk_score"
         high_risk = int((scores[score_col] >= 70).sum()) if score_col in scores.columns else 0
         avg_risk  = scores[score_col].mean() if score_col in scores.columns else 0
+        peak_risk = f"{scores[score_col].max():.0f}" if score_col in scores.columns else "—"
         est_pool  = f"{meta['national_pool']/1_000_000:.1f}M"
         col.markdown(f"""
         <div class="card" style="border-top:3px solid {meta['color']};">
@@ -339,7 +340,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame):
               <div style="font-size:.67rem;color:{MUTED};">avg risk score</div>
             </div>
             <div>
-              <div style="font-size:1.1rem;font-weight:800;color:{DARK};">{scores[score_col].max():.0f}" if score_col in scores.columns else "—"}</div>
+              <div style="font-size:1.1rem;font-weight:800;color:{DARK};">{peak_risk}</div>
               <div style="font-size:.67rem;color:{MUTED};">peak score</div>
             </div>
           </div>
