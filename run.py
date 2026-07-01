@@ -8,17 +8,19 @@ Usage:
     python run.py                        # Full pipeline, US, all conditions
     python run.py --country us           # Explicit country
     python run.py --skip-data            # Skip data generation (use existing)
-    python run.py --skip-train           # Skip training (use existing models)
+    python run.py --skip-train           # Skip model training (use existing)
+    python run.py --skip-open-data       # Skip open data download (use cache)
     python run.py --db                   # Write all outputs to Neon after scoring
     python run.py --dashboard            # Launch dashboard after scoring
 
 Steps:
     1. Generate synthetic data (M1)
-    2. Compute feature signals (M2)
-    3. Train XGBoost scoring models (M3)
-    4. Score all counties → Geography Risk Score (M3)
-    5. Write to Neon DB (optional, --db)
-    6. Launch Streamlit dashboard (M4, optional, --dashboard)
+    2. Load open data + compute 7-dimension scores (NEW)
+    3. Compute feature signals (M2)
+    4. Train XGBoost scoring models (M3)
+    5. Score all counties → Geography Risk Score + Opportunity Score (M3)
+    6. Write to Neon DB (optional, --db)
+    7. Launch Streamlit dashboard (M4, optional, --dashboard)
 """
 
 import argparse
@@ -46,12 +48,14 @@ def run_pipeline(
     country: str = "us",
     skip_data: bool = False,
     skip_train: bool = False,
+    skip_open_data: bool = False,
     write_db: bool = False,
     launch_dashboard: bool = False,
 ):
     country_config = f"config/{country}.yaml"
     conditions_config = "config/conditions.yaml"
     data_dir = "data/synthetic"
+    open_data_dir = "data/open"
     model_dir = "data/models"
     scored_dir = "data/scored"
 
@@ -61,7 +65,7 @@ def run_pipeline(
             log.error(f"Config not found: {path}")
             sys.exit(1)
 
-    total_steps = 4 + (1 if write_db else 0) + (1 if launch_dashboard else 0)
+    total_steps = 5 + (1 if write_db else 0) + (1 if launch_dashboard else 0)
 
     # ------------------------------------------------------------------
     # Step 1: Synthetic Data Generation
@@ -80,9 +84,37 @@ def run_pipeline(
         log.info("Skipping data generation (--skip-data)")
 
     # ------------------------------------------------------------------
-    # Step 2: Feature Engineering
+    # Step 2: Open Data + 7-Dimension Scoring
     # ------------------------------------------------------------------
-    banner("Feature Engineering", 2, total_steps)
+    dim_scores_path = Path(scored_dir) / "dimension_scores.parquet"
+    if not skip_open_data or not dim_scores_path.exists():
+        banner("Open Data Download + 7-Dimension Scoring", 2, total_steps)
+        t0 = time.time()
+        try:
+            import pandas as pd
+            counties = pd.read_parquet(Path(data_dir) / "counties.parquet")
+            from src.ingestion.open_data.data_loader import load_all
+            panel = load_all(counties, cache_dir=open_data_dir,
+                             force_download=(not skip_open_data))
+            from src.features.dimension_scorer import compute_all_dimensions
+            try:
+                features_long = pd.read_parquet(Path(data_dir) / "features_long.parquet")
+            except Exception:
+                features_long = None
+            dim_scores = compute_all_dimensions(panel, orig_signals=features_long)
+            Path(scored_dir).mkdir(parents=True, exist_ok=True)
+            dim_scores.to_parquet(dim_scores_path, index=False)
+            log.info(f"✓ 7-dimension scoring complete ({time.time()-t0:.1f}s)")
+            log.info(f"  Priority counties (score≥70): {(dim_scores['opportunity_score'] >= 70).sum()}")
+        except Exception as exc:
+            log.warning(f"Open data / dimension scoring failed ({exc}). Continuing without it.")
+    else:
+        log.info("Skipping open data download (--skip-open-data and cache exists)")
+
+    # ------------------------------------------------------------------
+    # Step 3: Feature Engineering
+    # ------------------------------------------------------------------
+    banner("Feature Engineering", 3, total_steps)
     t0 = time.time()
     from src.features.signals import run as feat_run
     feat_run(
@@ -94,10 +126,10 @@ def run_pipeline(
     log.info(f"✓ Feature engineering complete ({time.time()-t0:.1f}s)")
 
     # ------------------------------------------------------------------
-    # Step 3: Model Training
+    # Step 4: Model Training
     # ------------------------------------------------------------------
     if not skip_train:
-        banner("Model Training (XGBoost + SHAP)", 3, total_steps)
+        banner("Model Training (XGBoost + SHAP)", 4, total_steps)
         t0 = time.time()
         from src.model.train import run as train_run
         train_run(
@@ -111,9 +143,9 @@ def run_pipeline(
         log.info("Skipping training (--skip-train)")
 
     # ------------------------------------------------------------------
-    # Step 4: Scoring
+    # Step 5: Scoring
     # ------------------------------------------------------------------
-    banner("Geography Risk Scoring", 4, total_steps)
+    banner("Geography Risk Scoring + Opportunity Score", 5, total_steps)
     t0 = time.time()
     from src.model.score import run as score_run
     scores = score_run(
@@ -138,10 +170,10 @@ def run_pipeline(
     log.info(f"\nTop 10 opportunity counties:\n{preview.to_string(index=False)}")
 
     # ------------------------------------------------------------------
-    # Step 5: Write to Neon (optional)
+    # Step 6: Write to Neon (optional)
     # ------------------------------------------------------------------
     if write_db:
-        step_n = 5
+        step_n = 6
         banner("Writing All Data to Neon (PostgreSQL)", step_n, total_steps)
         t0 = time.time()
         from src.db.connection import get_engine
@@ -188,6 +220,10 @@ def main():
         help="Skip model training (use existing models)"
     )
     parser.add_argument(
+        "--skip-open-data", action="store_true",
+        help="Skip open data re-download (use cached files if available)"
+    )
+    parser.add_argument(
         "--db", action="store_true",
         help="Write all pipeline outputs to Neon after scoring"
     )
@@ -201,6 +237,7 @@ def main():
         country=args.country,
         skip_data=args.skip_data,
         skip_train=args.skip_train,
+        skip_open_data=args.skip_open_data,
         write_db=args.db,
         launch_dashboard=args.dashboard,
     )

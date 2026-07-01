@@ -52,10 +52,21 @@ output:
     - county_name
     - state_name
     - population
+    - opportunity_score
     - overall_risk_score
     - t2d_risk_score
     - htn_risk_score
     - hyperthyroidism_risk_score
+    - opportunity_tier
+    - recommended_intervention
+    - priority_rank
+    - dim_disease_burden
+    - dim_diagnosis_gap
+    - dim_access_to_care
+    - dim_social_determinants
+    - dim_payer_landscape
+    - dim_commercial_readiness
+    - dim_trajectory
     - top_signal
     - total_estimated_pool
 

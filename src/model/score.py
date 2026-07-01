@@ -147,8 +147,42 @@ def run(
     )
     wide = wide.merge(pool_by_county, on="county_fips", how="left")
 
-    # Sort by overall risk score
-    wide = wide.sort_values("overall_risk_score", ascending=False).reset_index(drop=True)
+    # ------------------------------------------------------------------
+    # Merge 7-dimension scores if available
+    # ------------------------------------------------------------------
+    dim_scores_path = out_path / "dimension_scores.parquet"
+    if dim_scores_path.exists():
+        dim_scores = pd.read_parquet(dim_scores_path)
+        # Merge dim scores, opportunity fields, and payer/SDoH context columns
+        extra_context = [
+            "ma_penetration_rate", "medicaid_rate", "commercial_rate",
+            "diabetes_prevalence_pct", "obesity_rate_pct", "hypertension_prevalence_pct",
+            "poverty_rate", "uninsured_rate", "broadband_access_rate", "median_age",
+            "hpsa_flag", "fqhc_present",
+        ]
+        dim_cols = [c for c in dim_scores.columns if c.startswith("dim_") or
+                    c in ("opportunity_score", "opportunity_tier",
+                           "recommended_intervention", "priority_rank") or
+                    c in extra_context]
+        merge_cols = ["county_fips"] + dim_cols
+        merge_cols = [c for c in merge_cols if c in dim_scores.columns]
+        wide = wide.merge(dim_scores[merge_cols], on="county_fips", how="left")
+        log.info(f"Merged 7-dimension scores + payer context ({len(merge_cols)} columns)")
+    else:
+        log.info("No dimension_scores.parquet found — run without --skip-open-data to generate it.")
+        wide["opportunity_score"] = wide["overall_risk_score"]
+        wide["opportunity_tier"] = pd.cut(
+            wide["opportunity_score"],
+            bins=[0, 40, 70, 100],
+            labels=["Developing", "Emerging", "Priority"],
+            include_lowest=True,
+        )
+        wide["recommended_intervention"] = "Pharmacy-Based Screening"
+        wide["priority_rank"] = wide["opportunity_score"].rank(ascending=False).astype(int)
+
+    # Sort by opportunity score (7-dim composite) if available, else overall_risk_score
+    sort_col = "opportunity_score" if "opportunity_score" in wide.columns else "overall_risk_score"
+    wide = wide.sort_values(sort_col, ascending=False).reset_index(drop=True)
 
     # Save outputs
     wide.to_parquet(out_path / "scores.parquet", index=False)
@@ -161,7 +195,7 @@ def run(
     wide[available].to_csv(out_path / "opportunity_table.csv", index=False)
 
     log.info(f"Scoring complete. Top 5 opportunity counties:")
-    log.info(f"\n{wide[['county_name', 'state_name', 'overall_risk_score']].head().to_string(index=False)}")
+    log.info(f"\n{wide[['county_name', 'state_name', 'overall_risk_score', 'opportunity_score']].head().to_string(index=False)}")
 
     return wide
 
