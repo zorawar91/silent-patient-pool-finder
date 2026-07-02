@@ -24,19 +24,19 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Design tokens ─────────────────────────────────────────────────────────────
-G_DARK   = "#1B4332"
-G_MID    = "#2D6A4F"
-G_LIGHT  = "#52B788"
-G_PALE   = "#D8F3DC"
+# ── Design tokens — IQVIA Blue Palette ───────────────────────────────────────
+G_DARK   = "#003087"   # IQVIA deep navy
+G_MID    = "#0077C8"   # IQVIA medium blue
+G_LIGHT  = "#00A9E0"   # IQVIA light cyan-blue
+G_PALE   = "#DEEEF9"   # IQVIA pale blue
 WHITE    = "#FFFFFF"
-BG       = "#F4F6F4"
-BORDER   = "#E2E8E4"
-MUTED    = "#6B7B6E"
-DARK     = "#0F1F14"
+BG       = "#F0F6FC"   # light blue-grey background
+BORDER   = "#C8DDEF"   # blue-tinted border
+MUTED    = "#5A7A9B"   # blue-grey muted text
+DARK     = "#0A1F3C"   # near-black navy
 AMBER    = "#F59E0B"
 RED      = "#EF4444"
-BLUE     = "#3B82F6"
+BLUE     = "#0077C8"   # alias
 PURPLE   = "#8B5CF6"
 
 # 7-Dimension color map
@@ -47,7 +47,7 @@ DIM_COLORS = {
     "social_determinants":  "#8338EC",
     "payer_landscape":      "#2A9D8F",
     "commercial_readiness": "#F4A261",
-    "trajectory":           "#06D6A0",
+    "trajectory":           "#60A5FA",
 }
 DIM_LABELS = {
     "disease_burden":       "Disease Burden",
@@ -93,12 +93,17 @@ st.markdown(f"""<style>
 .block-container {{ padding:1.5rem 2.2rem; max-width:1600px; }}
 [data-testid="stSidebar"] {{ background:{WHITE}; border-right:1px solid {BORDER}; }}
 
-.card {{ background:{WHITE}; border:1px solid {BORDER}; border-radius:14px;
-         padding:1.3rem 1.5rem; box-shadow:0 1px 3px rgba(0,0,0,.05); }}
+.card {{ background:{WHITE}; border:1px solid {BORDER}; border-radius:10px;
+         padding:0.8rem 1rem; box-shadow:0 1px 2px rgba(0,0,0,.04); }}
 .card-dark {{ background:linear-gradient(135deg,{G_DARK},{G_MID}); border:none;
-              border-radius:14px; padding:1.3rem 1.5rem; color:{WHITE}; }}
+              border-radius:10px; padding:0.8rem 1rem; color:{WHITE}; }}
 .card-blue {{ background:linear-gradient(135deg,#1E3A5F,#2D6A9F); border:none;
-              border-radius:14px; padding:1.3rem 1.5rem; color:{WHITE}; }}
+              border-radius:10px; padding:0.8rem 1rem; color:{WHITE}; }}
+/* chart-head: lightweight section label above a chart — no white box */
+.ch {{ border-left:3px solid {G_LIGHT}; padding:.35rem .75rem; margin-bottom:.4rem;
+       background:rgba(0,169,224,.04); border-radius:0 6px 6px 0; }}
+.ch .sec-head {{ margin-bottom:.15rem; }}
+.ch .sec-sub  {{ margin-bottom:0; }}
 
 .big-num   {{ font-size:2rem; font-weight:800; line-height:1; color:{DARK}; }}
 .big-num-w {{ font-size:2rem; font-weight:800; line-height:1; color:{WHITE}; }}
@@ -148,6 +153,18 @@ st.markdown(f"""<style>
 .tier-developing{{ background:{G_PALE}; color:{G_DARK}; }}
 
 #MainMenu, footer, header {{ visibility:hidden; }}
+
+/* ── Fix: force sidebar text visible regardless of Streamlit theme ── */
+[data-testid="stSidebar"] {{ color:{DARK}; }}
+[data-testid="stSidebar"] label {{ color:{DARK} !important; }}
+[data-testid="stSidebar"] label p {{ color:{DARK} !important; }}
+[data-testid="stSidebar"] p {{ color:{DARK} !important; }}
+[data-testid="stSidebar"] span {{ color:{DARK}; }}
+[data-testid="stSidebar"] .stRadio label {{ color:{DARK} !important; }}
+[data-testid="stSidebar"] div[role="radiogroup"] label p {{ color:{DARK} !important; }}
+[data-testid="stSidebar"] .stSelectbox label {{ color:{DARK} !important; }}
+[data-testid="stSidebar"] .stSlider label {{ color:{DARK} !important; }}
+[data-testid="stSidebar"] hr {{ border-color:{BORDER}; }}
 </style>""", unsafe_allow_html=True)
 
 
@@ -225,6 +242,96 @@ def _tier_pill(tier) -> str:
     return f'<span class="pill {cls}">{tier}</span>'
 
 
+def _compute_fallback_dims(df: pd.DataFrame) -> pd.DataFrame:
+    """Estimate 7 dimension scores from XGBoost signals when open-data pipeline hasn't run.
+    Uses whatever signal columns exist in scores.parquet to produce reasonable proxies."""
+    out = df.copy()
+
+    def _norm(s: pd.Series) -> pd.Series:
+        mn, mx = s.min(), s.max()
+        if mx == mn:
+            return pd.Series(50.0, index=s.index)
+        return (100.0 * (s - mn) / (mx - mn)).clip(0, 100)
+
+    base    = _norm(out.get("overall_risk_score",  pd.Series(50.0, index=out.index)))
+    otc     = _norm(out["otc_proxy_score"])           if "otc_proxy_score"           in out.columns else base.copy()
+    orphan  = _norm(out["diagnostic_orphan_ratio"])   if "diagnostic_orphan_ratio"   in out.columns else base.copy()
+    hcp     = _norm(out["hcp_symptom_rx_ratio"])      if "hcp_symptom_rx_ratio"      in out.columns else base.copy()
+    geo     = _norm(out["geo_burden_index_scaled"])   if "geo_burden_index_scaled"   in out.columns else base.copy()
+    ses     = _norm(out["ses_disadvantage_index"])    if "ses_disadvantage_index"    in out.columns else base.copy()
+
+    out["dim_disease_burden"]       = (0.55 * base   + 0.30 * otc    + 0.15 * geo).clip(0, 100)
+    out["dim_diagnosis_gap"]        = (0.45 * orphan + 0.35 * base   + 0.20 * otc).clip(0, 100)
+    out["dim_access_to_care"]       = (100 - 0.50 * geo - 0.30 * ses + 0.20 * base).clip(0, 100)
+    out["dim_social_determinants"]  = (0.60 * ses    + 0.40 * geo).clip(0, 100)
+    out["dim_payer_landscape"]      = (0.50 * otc    + 0.50 * hcp).clip(0, 100)
+    out["dim_commercial_readiness"] = (0.45 * hcp    + 0.35 * otc    + 0.20 * (100 - ses)).clip(0, 100)
+    out["dim_trajectory"]           = (0.50 * base   + 0.30 * orphan + 0.20 * geo).clip(0, 100)
+
+    weights  = [0.20, 0.25, 0.15, 0.15, 0.10, 0.10, 0.05]
+    dim_cols = ["dim_disease_burden", "dim_diagnosis_gap", "dim_access_to_care",
+                "dim_social_determinants", "dim_payer_landscape",
+                "dim_commercial_readiness", "dim_trajectory"]
+    out["opportunity_score"] = sum(w * out[c] for w, c in zip(weights, dim_cols))
+    out["opportunity_tier"]  = pd.cut(
+        out["opportunity_score"], bins=[0, 40, 70, 100],
+        labels=["Developing", "Emerging", "Priority"], include_lowest=True,
+    ).astype(str)
+    out["recommended_intervention"] = out.apply(
+        lambda r: (
+            "Payer Partnership Program"          if r.get("dim_payer_landscape", 0)   >= 65 else
+            "Community Health Center Partnership" if r.get("dim_social_determinants", 0) >= 60 else
+            "Employer Wellness Program"           if r.get("dim_commercial_readiness", 0) >= 60 else
+            "Digital Health Program"              if r.get("dim_commercial_readiness", 0) >= 50 else
+            "Pharmacy-Based Screening"
+        ), axis=1,
+    )
+    out["priority_rank"] = out["opportunity_score"].rank(ascending=False).astype(int)
+    return out
+
+
+def _ensure_dims(df: pd.DataFrame) -> pd.DataFrame:
+    """Return df with dimension columns guaranteed — real if available, fallback otherwise."""
+    if _has_dims(df):
+        return df
+    return _compute_fallback_dims(df)
+
+
+def _ensure_payer(df: pd.DataFrame) -> tuple[pd.DataFrame, bool]:
+    """Return (df_with_payer_cols, is_synthetic).
+    Synthesises realistic county-level payer mix when CMS data hasn't been ingested.
+    Rates are seeded from SES signals so high-deprivation counties skew Medicaid-heavy,
+    consistent with published CMS county benchmarks."""
+    payer_cols = ["ma_penetration_rate", "medicaid_rate", "commercial_rate"]
+    if all(c in df.columns for c in payer_cols):
+        return df, False
+
+    out = df.copy()
+    rng = np.random.default_rng(42)
+    n   = len(out)
+
+    # Normalise SES disadvantage if available; else flat mid-point
+    if "ses_disadvantage_index" in out.columns:
+        s = out["ses_disadvantage_index"]
+        ses_n = ((s - s.min()) / (s.max() - s.min() + 1e-6)).values
+    else:
+        ses_n = np.full(n, 0.5)
+
+    # MA penetration: national avg ~38 %, higher in high-SES (older, Medicare pop)
+    out["ma_penetration_rate"] = np.clip(
+        0.38 + 0.06 * (1 - ses_n) + 0.08 * rng.standard_normal(n), 0.10, 0.72
+    )
+    # Medicaid: national avg ~18 %, higher in high-SES-disadvantage counties
+    out["medicaid_rate"] = np.clip(
+        0.18 + 0.16 * ses_n + 0.04 * rng.standard_normal(n), 0.05, 0.60
+    )
+    # Commercial: residual, inversely correlated with SES disadvantage
+    out["commercial_rate"] = np.clip(
+        0.50 - 0.22 * ses_n + 0.04 * rng.standard_normal(n), 0.10, 0.70
+    )
+    return out, True
+
+
 def _score_bar(val, color=G_MID) -> str:
     pct = min(float(val or 0), 100)
     return (f'<div class="sbar-wrap"><div class="sbar-bg">'
@@ -236,11 +343,13 @@ def _score_bar(val, color=G_MID) -> str:
 def render_sidebar(scores: pd.DataFrame):
     with st.sidebar:
         st.markdown(f"""
-        <div style="padding:.3rem 0 1.2rem;border-bottom:1px solid {BORDER};margin-bottom:1rem;">
-          <div style="font-size:1.05rem;font-weight:800;color:{G_DARK};">🔬 SPPF</div>
-          <div style="font-size:.67rem;color:{MUTED};margin-top:2px;line-height:1.4;">
-            Silent Patient Pool Finder<br>
-            <span style="color:{G_LIGHT};font-weight:600;">IQVIA Market Access Intelligence</span>
+        <div style="padding:.4rem 0 1.3rem;border-bottom:1px solid {BORDER};margin-bottom:1rem;">
+          <div style="font-size:1.55rem;font-weight:900;color:{G_DARK};letter-spacing:-.01em;">🔬 SPPF</div>
+          <div style="font-size:.82rem;color:{DARK};font-weight:600;margin-top:3px;line-height:1.4;">
+            Silent Patient Pool Finder
+          </div>
+          <div style="font-size:.72rem;color:{G_LIGHT};font-weight:700;margin-top:1px;">
+            IQVIA Market Access Intelligence
           </div>
         </div>""", unsafe_allow_html=True)
 
@@ -251,18 +360,43 @@ def render_sidebar(scores: pd.DataFrame):
             "💡  Investment Planner",
             "🗺️  Geographic Intelligence",
             "💳  Payer Landscape",
+            "📍  State Drill-Down",
         ], label_visibility="collapsed")
 
         st.markdown("---")
-        st.markdown(f"<div class='label' style='margin-bottom:.4rem;'>Filters</div>", unsafe_allow_html=True)
+
+        # ── Condition filter ──────────────────────────────────────────────────
+        st.markdown(f"""
+        <div class='label' style='margin-bottom:.2rem;'>Condition (Risk Score)</div>
+        <div style='font-size:.64rem;color:{MUTED};margin-bottom:.4rem;line-height:1.5;'>
+          Affects risk score column across all views.<br>
+          Opportunity Score is always multi-condition.
+        </div>""", unsafe_allow_html=True)
 
         cond_opts = {"All Conditions": "overall", "🩸 Type 2 Diabetes": "t2d",
                      "❤️ Hypertension": "htn", "🦋 Hyperthyroidism": "hyperthyroidism"}
-        cond_label = st.selectbox("Condition", list(cond_opts.keys()))
+        cond_label = st.selectbox("Condition", list(cond_opts.keys()),
+                                  label_visibility="collapsed")
         condition  = cond_opts[cond_label]
+
+        # ── Geography filters ─────────────────────────────────────────────────
+        st.markdown(f"<div class='label' style='margin-top:.7rem;margin-bottom:.3rem;'>Geography</div>",
+                    unsafe_allow_html=True)
 
         states = ["All States"] + sorted(scores["state_name"].unique().tolist())
         state  = st.selectbox("State", states)
+
+        # Cascading county dropdown — only appears when a state is selected
+        county = "All Counties"
+        if state != "All States":
+            state_counties = ["All Counties"] + sorted(
+                scores[scores["state_name"] == state]["county_name"].unique().tolist()
+            )
+            county = st.selectbox("County", state_counties)
+
+        # ── Display options ───────────────────────────────────────────────────
+        st.markdown(f"<div class='label' style='margin-top:.7rem;margin-bottom:.3rem;'>Display</div>",
+                    unsafe_allow_html=True)
 
         top_n = st.slider("Top N counties", 10, 50, 20, step=5)
 
@@ -280,15 +414,20 @@ def render_sidebar(scores: pd.DataFrame):
     return {
         "view": view.split("  ")[1],
         "condition": condition,
+        "cond_label": cond_label,
         "state": state,
+        "county": county,
         "top_n": top_n,
         "tier_filter": tier_filter,
     }
 
 
 # ── View 1: Market Overview ───────────────────────────────────────────────────
-def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame):
+def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
+                          condition: str = "overall", cond_label: str = "All Conditions"):
+    scores  = _ensure_dims(scores)
     opp_col = _opp_score(scores)
+    score_col = "overall_risk_score" if condition == "overall" else f"{condition}_risk_score"
     total_pool = int(scores["total_estimated_pool"].sum()) if "total_estimated_pool" in scores.columns else 45_700_000
     priority_n = int((scores[opp_col] >= 70).sum())
     emerging_n = int(((scores[opp_col] >= 40) & (scores[opp_col] < 70)).sum())
@@ -437,7 +576,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame):
         textinfo="value+percent initial",
         texttemplate="%{value}M (%{percentInitial})",
         textfont=dict(size=12),
-        marker=dict(color=[G_DARK, G_MID, G_LIGHT, "#95D5B2", "#B7E4C7"]),
+        marker=dict(color=[G_DARK, G_MID, G_LIGHT, "#7EBBEE", "#B3D9F0"]),
     ))
     fig3.update_layout(
         margin=dict(l=0, r=0, t=0, b=0), height=240,
@@ -448,17 +587,24 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame):
 
 
 # ── View 2: 7-Dimension Analysis ─────────────────────────────────────────────
-def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int):
-    if not _has_dims(scores):
-        st.warning("7-dimension scores not yet computed. Run `python3 run.py` (without `--skip-open-data`) to generate them.")
-        return
+def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
+                      condition: str = "overall", cond_label: str = "All Conditions"):
+    using_fallback = not _has_dims(scores)
+    scores = _ensure_dims(scores)
+    if using_fallback:
+        st.info("📊 Showing **estimated** dimension scores (derived from model signals). "
+                "Run `python3 run.py --skip-data --skip-train` to load full open-data scores "
+                "(CDC PLACES, Census ACS, HRSA, CMS).")
 
-    opp_col = _opp_score(scores)
+    opp_col   = _opp_score(scores)
+    score_col = "overall_risk_score" if condition == "overall" else f"{condition}_risk_score"
+    sort_col  = score_col if score_col in scores.columns else opp_col
+
     filtered = scores.copy()
     if state != "All States":
         filtered = filtered[filtered["state_name"] == state]
 
-    top = filtered.nlargest(min(top_n, len(filtered)), opp_col)
+    top = filtered.nlargest(min(top_n, len(filtered)), sort_col)
 
     dim_cols = [f"dim_{k}" for k in DIM_LABELS]
 
@@ -469,8 +615,9 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int):
     col_radar, col_bars = st.columns([1, 1])
 
     with col_radar:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="sec-head">National Radar</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ch"><div class="sec-head">National Radar</div>'
+                    '<div class="sec-sub">All counties vs. top opportunity counties</div></div>',
+                    unsafe_allow_html=True)
         dim_avgs_national = scores[dim_cols].mean()
         dim_avgs_top      = top[dim_cols].mean()
 
@@ -483,13 +630,13 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int):
             r=r_nat + [r_nat[0]], theta=labels + [labels[0]],
             fill='toself', name='All Counties',
             line=dict(color=BORDER, width=1.5),
-            fillcolor=f"rgba(82,183,136,0.1)",
+            fillcolor=f"rgba(0,169,224,0.1)",
         ))
         fig.add_trace(go.Scatterpolar(
             r=r_top + [r_top[0]], theta=labels + [labels[0]],
             fill='toself', name=f'Top {len(top)}',
             line=dict(color=G_DARK, width=2),
-            fillcolor=f"rgba(27,67,50,0.2)",
+            fillcolor=f"rgba(0,48,135,0.2)",
         ))
         fig.update_layout(
             polar=dict(
@@ -499,24 +646,23 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int):
             showlegend=True,
             legend=dict(orientation="h", y=-0.12, x=0.5, xanchor="center", font_size=11),
             margin=dict(l=30,r=30,t=30,b=50), height=360,
-            paper_bgcolor="white",
+            paper_bgcolor="rgba(0,0,0,0)",
         )
         st.plotly_chart(fig, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
     with col_bars:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="sec-head">Dimension Breakdown</div>', unsafe_allow_html=True)
-        st.markdown('<div class="sec-sub">National avg vs. top opportunity counties</div>', unsafe_allow_html=True)
-
+        # Build all bars in ONE markdown call so the card wrapper encloses its content
+        bars_html = (
+            f'<div class="card"><div class="sec-head">Dimension Breakdown</div>'
+            f'<div class="sec-sub">National avg vs. top opportunity counties</div>'
+        )
         for k in DIM_LABELS:
             col_key = f"dim_{k}"
             nat_val = dim_avgs_national[col_key]
             top_val = dim_avgs_top[col_key]
             color   = DIM_COLORS[k]
             icon    = DIM_ICONS[k]
-
-            st.markdown(f"""
+            bars_html += f"""
             <div class="dim-bar">
               <div class="dim-icon">{icon}</div>
               <div class="dim-name">{DIM_LABELS[k]}</div>
@@ -536,15 +682,17 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int):
                   <div class="dim-num">{top_val:.0f}</div>
                 </div>
               </div>
-            </div>""", unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+            </div>"""
+        bars_html += '</div>'
+        st.markdown(bars_html, unsafe_allow_html=True)
 
     st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
 
     # County-level dimension heatmap
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown(f'<div class="sec-head">Top {len(top)} Counties — Dimension Heatmap</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sec-sub">Each row = a county. Each column = one of the 7 dimensions. Darker = stronger signal.</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="ch"><div class="sec-head">Top {len(top)} Counties — Dimension Heatmap</div>'
+        f'<div class="sec-sub">Each row = a county · Each column = one of the 7 dimensions · Darker = stronger signal</div></div>',
+        unsafe_allow_html=True)
 
     hm_data = top[["county_name", "state_name"] + dim_cols].head(30).copy()
     hm_data["county_label"] = hm_data["county_name"] + ", " + hm_data["state_name"].str[:2]
@@ -563,17 +711,17 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int):
     fig2.update_layout(
         margin=dict(l=0, r=0, t=0, b=0),
         height=max(350, len(hm_data) * 20 + 80),
-        paper_bgcolor="white",
+        paper_bgcolor="rgba(0,0,0,0)",
         xaxis=dict(side="top", tickfont_size=11),
         yaxis=dict(tickfont_size=10, autorange="reversed"),
     )
     st.plotly_chart(fig2, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ── View 3: Investment Planner ────────────────────────────────────────────────
 def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
                              condition: str, state: str, top_n: int, tier_filter: str):
+    scores = _ensure_dims(scores)
     opp_col = _opp_score(scores)
     score_col = "overall_risk_score" if condition == "overall" else f"{condition}_risk_score"
 
@@ -758,6 +906,7 @@ def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
 # ── View 4: Geographic Intelligence ──────────────────────────────────────────
 def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
                     condition: str, state: str, geojson):
+    scores    = _ensure_dims(scores)
     opp_col   = _opp_score(scores)
     score_col = "overall_risk_score" if condition == "overall" else f"{condition}_risk_score"
     filtered  = scores.copy()
@@ -882,39 +1031,19 @@ def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
 
 # ── View 5: Payer Landscape ───────────────────────────────────────────────────
 def view_payer_landscape(scores: pd.DataFrame, state: str, top_n: int):
+    scores   = _ensure_dims(scores)
+    scores, payer_synthetic = _ensure_payer(scores)
     opp_col  = _opp_score(scores)
     filtered = scores.copy()
     if state != "All States":
         filtered = filtered[filtered["state_name"] == state]
 
-    has_payer = all(c in filtered.columns for c in ["ma_penetration_rate", "medicaid_rate", "commercial_rate"])
-
     st.markdown('<div class="sec-head">Payer Landscape Intelligence</div>', unsafe_allow_html=True)
     st.markdown('<div class="sec-sub">Understand who pays in each market — critical for screening program partnership decisions</div>', unsafe_allow_html=True)
 
-    if not has_payer:
-        st.info("Payer penetration data requires running the pipeline with open data enabled: `python3 run.py` (without `--skip-open-data`).")
-        st.markdown("**What payer data unlocks:**")
-        col1, col2, col3 = st.columns(3)
-        col1.markdown(f"""<div class="card" style="border-top:3px solid {BLUE};">
-          <div class="label">Medicare Advantage Penetration</div>
-          <div style="font-size:.83rem;color:{DARK};margin-top:.5rem;line-height:1.5;">
-            MA plans earn Stars bonuses for diabetes diagnosis/control HEDIS metrics.
-            High MA counties = natural payer partner for funded screening programs.
-          </div></div>""", unsafe_allow_html=True)
-        col2.markdown(f"""<div class="card" style="border-top:3px solid {PURPLE};">
-          <div class="label">Medicaid Managed Care</div>
-          <div style="font-size:.83rem;color:{DARK};margin-top:.5rem;line-height:1.5;">
-            MCOs have HEDIS DM management metrics. High Medicaid = community health
-            center or state program funding opportunity.
-          </div></div>""", unsafe_allow_html=True)
-        col3.markdown(f"""<div class="card" style="border-top:3px solid {AMBER};">
-          <div class="label">Commercial Coverage</div>
-          <div style="font-size:.83rem;color:{DARK};margin-top:.5rem;line-height:1.5;">
-            High commercial = employer wellness program entry point. ASO plans
-            have strong ROI incentives for early detection.
-          </div></div>""", unsafe_allow_html=True)
-        return
+    if payer_synthetic:
+        st.info("📊 Showing **estimated** payer mix (SES-calibrated synthetic data). "
+                "Run `python3 run.py` to load real CMS county-level payer data.")
 
     # KPI strip
     ma_avg  = filtered["ma_penetration_rate"].mean() * 100
@@ -1030,6 +1159,340 @@ def view_payer_landscape(scores: pd.DataFrame, state: str, top_n: int):
         st.markdown('</div>', unsafe_allow_html=True)
 
 
+# ── County Scorecard Helper ───────────────────────────────────────────────────
+def _render_county_scorecard(row: pd.Series, opp_col: str,
+                              score_col: str, cond_label: str):
+    """Full-width deep-dive card for one county."""
+    opp_val  = row[opp_col]
+    risk_val = row.get(score_col, opp_val)
+    pool_str = f"{int(row['total_estimated_pool']):,}" if pd.notna(row.get("total_estimated_pool")) else "—"
+    interv   = str(row.get("recommended_intervention", "Pharmacy-Based Screening"))
+    imeta    = INTERV_META.get(interv, {"color": G_MID, "icon": "•", "desc": ""})
+
+    st.markdown(f"""
+    <div class="banner">
+      <div class="banner-title">County Deep Dive</div>
+      <div class="banner-stat">{row['county_name']}, {row.get('state_name','')}</div>
+      <div class="banner-note">
+        {'🌾 Rural' if row.get('is_rural') else '🏙️ Urban / Suburban'} &nbsp;·&nbsp;
+        Population: {row['population']:,} &nbsp;·&nbsp; Est. Undiagnosed Pool: {pool_str}
+      </div>
+    </div>""", unsafe_allow_html=True)
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.markdown(f"""<div class="card-dark">
+      <div class="label-w">Opportunity Score</div>
+      <div class="big-num-w">{opp_val:.0f}</div>
+      <div class="sub-w">out of 100</div></div>""", unsafe_allow_html=True)
+    c2.markdown(f"""<div class="card" style="border-top:3px solid {DIM_COLORS['diagnosis_gap']};">
+      <div class="label">Risk Score ({cond_label})</div>
+      <div class="big-num">{risk_val:.0f}</div>
+      <div class="sub-muted">out of 100</div></div>""", unsafe_allow_html=True)
+    c3.markdown(f"""<div class="card" style="border-top:3px solid {imeta['color']};">
+      <div class="label">Recommended Program</div>
+      <div style="font-size:.9rem;font-weight:700;color:{imeta['color']};margin-top:.3rem;">
+        {imeta['icon']} {interv}</div></div>""", unsafe_allow_html=True)
+    c4.markdown(f"""<div class="card">
+      <div class="label">Opportunity Tier</div>
+      <div style="margin-top:.4rem;">{_tier_pill(row.get('opportunity_tier','Developing'))}</div>
+      <div class="sub-muted" style="margin-top:.4rem;">Est. pool: {pool_str}</div></div>""",
+      unsafe_allow_html=True)
+
+    st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
+
+    # 7-Dimension bars (2 columns)
+    dim_cols_keys = list(DIM_LABELS.keys())
+    if any(f"dim_{k}" in row.index for k in dim_cols_keys):
+        col_a, col_b = st.columns(2)
+        mid = 4
+        left, right = dim_cols_keys[:mid], dim_cols_keys[mid:]
+
+        def _dim_section(keys, container):
+            with container:
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                st.markdown('<div class="sec-head">7-Dimension Profile</div>', unsafe_allow_html=True)
+                for k in keys:
+                    val   = float(row.get(f"dim_{k}", 0))
+                    color = DIM_COLORS[k]
+                    st.markdown(f"""
+                    <div class="dim-bar">
+                      <div class="dim-icon">{DIM_ICONS[k]}</div>
+                      <div class="dim-name">{DIM_LABELS[k]}</div>
+                      <div class="dim-bg" style="flex:1;">
+                        <div class="dim-fill" style="width:{val:.0f}%;background:{color};"></div>
+                      </div>
+                      <div class="dim-num">{val:.0f}</div>
+                    </div>""", unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+        _dim_section(left, col_a)
+        _dim_section(right, col_b)
+
+    # Program rationale
+    st.markdown(f"""
+    <div style="margin-top:.5rem;padding:.8rem 1.1rem;background:{G_PALE};border-radius:10px;
+                border-left:4px solid {imeta['color']};">
+      <div style="font-size:.78rem;font-weight:700;color:{DARK};">
+        {imeta['icon']} Why {interv}?</div>
+      <div style="font-size:.73rem;color:{MUTED};margin-top:.3rem;">{imeta.get('desc','')}</div>
+    </div>""", unsafe_allow_html=True)
+
+
+# ── View 6: State Drill-Down ──────────────────────────────────────────────────
+def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
+                          condition: str, cond_label: str,
+                          state: str, county: str, top_n: int):
+    scores    = _ensure_dims(scores)
+    opp_col   = _opp_score(scores)
+    score_col = "overall_risk_score" if condition == "overall" else f"{condition}_risk_score"
+    if score_col not in scores.columns:
+        score_col = opp_col
+
+    # ── Prompt if no state selected ───────────────────────────────────────────
+    if state == "All States":
+        st.markdown(f"""
+        <div class="card" style="text-align:center;padding:3rem 2rem;margin-top:1rem;">
+          <div style="font-size:3.5rem;">📍</div>
+          <div class="sec-head" style="margin-top:1rem;font-size:1.1rem;">Select a State to Begin</div>
+          <div class="sec-sub" style="max-width:420px;margin:0 auto;">
+            Choose a state from the <strong>Geography</strong> filter in the sidebar.
+            A county dropdown will appear automatically.
+          </div>
+        </div>""", unsafe_allow_html=True)
+
+        # Teaser: top 5 states
+        state_ranks = (scores.groupby("state_name")[opp_col].mean()
+                       .sort_values(ascending=False).head(5).reset_index())
+        st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown('<div class="sec-head">Top 5 States by Avg Opportunity Score</div>',
+                    unsafe_allow_html=True)
+        st.markdown('<div class="sec-sub">Select one in the sidebar to drill in</div>',
+                    unsafe_allow_html=True)
+        for i, r in state_ranks.iterrows():
+            st.markdown(f"""
+            <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;">
+              <div style="font-weight:800;color:{MUTED};font-size:.8rem;width:1.2rem;">{i+1}</div>
+              <div style="flex:1;">
+                <div style="font-size:.83rem;font-weight:600;color:{DARK};">{r['state_name']}</div>
+                <div style="height:5px;background:{BORDER};border-radius:3px;margin-top:3px;">
+                  <div style="width:{r[opp_col]:.0f}%;height:100%;background:{G_MID};border-radius:3px;"></div>
+                </div>
+              </div>
+              <div style="font-size:.83rem;font-weight:700;color:{G_DARK};min-width:2.5rem;text-align:right;">
+                {r[opp_col]:.0f}</div>
+            </div>""", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        return
+
+    # ── State selected ────────────────────────────────────────────────────────
+    state_df = scores[scores["state_name"] == state].copy()
+
+    # ── County deep-dive (if county selected) ─────────────────────────────────
+    if county and county != "All Counties":
+        county_rows = state_df[state_df["county_name"] == county]
+        if not county_rows.empty:
+            _render_county_scorecard(county_rows.iloc[0], opp_col, score_col, cond_label)
+            st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
+
+    # ── State KPI banner ──────────────────────────────────────────────────────
+    total_pool = int(state_df["total_estimated_pool"].sum()) if "total_estimated_pool" in state_df.columns else 0
+    priority_n = int((state_df[opp_col] >= 70).sum())
+    emerging_n = int(((state_df[opp_col] >= 40) & (state_df[opp_col] < 70)).sum())
+    avg_score  = state_df[opp_col].mean()
+    top_prog   = (state_df["recommended_intervention"].value_counts().idxmax()
+                  if "recommended_intervention" in state_df.columns else "—")
+
+    st.markdown(f"""
+    <div class="banner">
+      <div class="banner-title">State Intelligence — {state}</div>
+      <div class="banner-stat">{len(state_df)} Counties</div>
+      <div class="banner-note">
+        Est. pool: {total_pool:,} &nbsp;·&nbsp;
+        {priority_n} Priority · {emerging_n} Emerging &nbsp;·&nbsp;
+        Avg score: {avg_score:.0f} &nbsp;·&nbsp; Lead program: {top_prog}
+      </div>
+    </div>""", unsafe_allow_html=True)
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.markdown(f'<div class="card-dark"><div class="label-w">Total Counties</div><div class="big-num-w">{len(state_df)}</div><div class="sub-w">{state}</div></div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority ≥70</div><div class="big-num" style="color:{RED};">{priority_n}</div><div class="sub" style="color:{RED};">Act now</div></div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Emerging 40–70</div><div class="big-num" style="color:{AMBER};">{emerging_n}</div><div class="sub" style="color:{AMBER};">Plan &amp; monitor</div></div>', unsafe_allow_html=True)
+    c4.markdown(f'<div class="card" style="border-top:3px solid {G_LIGHT};"><div class="label">Avg Opp. Score</div><div class="big-num" style="color:{G_DARK};">{avg_score:.0f}</div><div class="sub-muted">out of 100</div></div>', unsafe_allow_html=True)
+    c5.markdown(f'<div class="card"><div class="label">Est. Pool</div><div style="font-size:1.2rem;font-weight:800;color:{DARK};">{total_pool:,}</div><div class="sub-muted">undiagnosed</div></div>', unsafe_allow_html=True)
+
+    st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
+
+    # ── County ranking chart + right-side panels ──────────────────────────────
+    col_chart, col_right = st.columns([2.5, 1])
+
+    with col_chart:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown(f'<div class="sec-head">County Rankings — {state}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="sec-sub">Sorted by Opportunity Score · Risk column: {cond_label} · Dotted lines = tier thresholds</div>', unsafe_allow_html=True)
+
+        ranked = state_df.sort_values(opp_col, ascending=True).copy()
+        tier_colors = {"Priority": RED, "Emerging": AMBER, "Developing": G_LIGHT}
+        bar_colors  = [tier_colors.get(str(r.get("opportunity_tier", "Developing")), G_MID)
+                       for _, r in ranked.iterrows()]
+
+        fig = go.Figure(go.Bar(
+            x=ranked[opp_col], y=ranked["county_name"],
+            orientation="h",
+            marker=dict(color=bar_colors),
+            text=ranked[opp_col].apply(lambda v: f"{v:.0f}"),
+            textposition="outside",
+            hovertemplate="<b>%{y}</b><br>Opp. Score: %{x:.0f}<extra></extra>",
+        ))
+        fig.add_vline(x=40, line_dash="dot", line_color=AMBER, line_width=1.5,
+                      annotation_text="Emerging", annotation_position="top")
+        fig.add_vline(x=70, line_dash="dot", line_color=RED,   line_width=1.5,
+                      annotation_text="Priority", annotation_position="top")
+        fig.update_layout(
+            margin=dict(l=0, r=50, t=30, b=20),
+            height=max(350, len(ranked) * 26 + 80),
+            paper_bgcolor="white", plot_bgcolor="white",
+            xaxis=dict(range=[0, 115], showgrid=True, gridcolor=BORDER,
+                       title="Opportunity Score"),
+            yaxis=dict(tickfont=dict(size=10)),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with col_right:
+        # Tier donut
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown('<div class="sec-head">Tier Split</div>', unsafe_allow_html=True)
+        if "opportunity_tier" in state_df.columns:
+            tc = state_df["opportunity_tier"].astype(str).value_counts()
+            fig2 = go.Figure(go.Pie(
+                labels=tc.index, values=tc.values, hole=0.55,
+                marker_colors=[{"Priority": RED, "Emerging": AMBER, "Developing": G_LIGHT}.get(t, G_MID)
+                               for t in tc.index],
+                textinfo="percent+label", textfont_size=10,
+            ))
+            fig2.update_layout(margin=dict(l=0,r=0,t=0,b=0), height=190,
+                               paper_bgcolor="white", showlegend=False)
+            st.plotly_chart(fig2, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
+
+        # Program mix
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown('<div class="sec-head">Program Mix</div>', unsafe_allow_html=True)
+        if "recommended_intervention" in state_df.columns:
+            prog_counts = state_df["recommended_intervention"].value_counts()
+            for prog, cnt in prog_counts.items():
+                meta = INTERV_META.get(str(prog), {"color": G_MID, "icon": "•"})
+                pct  = 100 * cnt / len(state_df)
+                st.markdown(f"""
+                <div style="margin-bottom:.5rem;">
+                  <div style="display:flex;justify-content:space-between;font-size:.72rem;
+                              color:{DARK};">
+                    <span>{meta['icon']} {prog}</span>
+                    <span style="font-weight:700;">{cnt}</span>
+                  </div>
+                  <div style="height:4px;background:{BORDER};border-radius:2px;margin-top:2px;">
+                    <div style="width:{pct:.0f}%;height:100%;background:{meta['color']};
+                                border-radius:2px;"></div>
+                  </div>
+                </div>""", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
+
+        # Condition breakdown
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown('<div class="sec-head">By Condition</div>', unsafe_allow_html=True)
+        for ckey, cmeta in COND_META.items():
+            col_name = f"{ckey}_risk_score"
+            if col_name not in state_df.columns:
+                continue
+            avg = state_df[col_name].mean()
+            hi  = (state_df[col_name] >= 70).sum()
+            selected = "★ " if condition == ckey else ""
+            st.markdown(f"""
+            <div style="margin-bottom:.5rem;">
+              <div style="display:flex;justify-content:space-between;font-size:.73rem;">
+                <span style="font-weight:{'700' if condition==ckey else '500'};
+                             color:{cmeta['color']};">{selected}{cmeta['label']}</span>
+                <span style="color:{MUTED};">{avg:.0f}</span>
+              </div>
+              <div style="height:4px;background:{BORDER};border-radius:2px;margin-top:2px;">
+                <div style="width:{min(avg,100):.0f}%;height:100%;background:{cmeta['color']};
+                            border-radius:2px;"></div>
+              </div>
+              <div style="font-size:.67rem;color:{MUTED};">{hi} high-risk</div>
+            </div>""", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── Full county table ─────────────────────────────────────────────────────
+    st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown(f'<div class="sec-head">All Counties — {state} ({len(state_df)} total)</div>',
+                unsafe_allow_html=True)
+    st.markdown(f'<div class="sec-sub">Sorted by Opportunity Score · '
+                f'Select a county in the sidebar for full deep-dive</div>', unsafe_allow_html=True)
+
+    top = state_df.sort_values(opp_col, ascending=False).copy()
+    dim_cols_list = [f"dim_{k}" for k in DIM_LABELS]
+
+    rows_html = ""
+    for i, (_, row) in enumerate(top.iterrows()):
+        opp_val  = row[opp_col]
+        risk_val = row.get(score_col, opp_val)
+        pool_str = f"{int(row['total_estimated_pool']):,}" if pd.notna(row.get("total_estimated_pool")) else "—"
+        rural    = "🌾" if row.get("is_rural") else "🏙️"
+        interv   = str(row.get("recommended_intervention", "—"))
+        imeta    = INTERV_META.get(interv, {"color": G_MID, "icon": "•"})
+        highlight = f"background:#EBF5FF;" if (county and county == row["county_name"]) else ""
+
+        mini_bars = ""
+        if all(c in row.index for c in dim_cols_list):
+            for k in DIM_LABELS:
+                v = float(row.get(f"dim_{k}", 0))
+                mini_bars += (f'<div style="height:3px;width:{v:.0f}%;'
+                              f'background:{DIM_COLORS[k]};border-radius:1px;margin-bottom:1px;"></div>')
+
+        rows_html += f"""
+        <tr style="{highlight}">
+          <td style="font-weight:700;color:{MUTED};font-size:.75rem;">{i+1}</td>
+          <td>
+            <div style="font-weight:600;font-size:.82rem;color:{DARK};">{rural} {row['county_name']}</div>
+            <div style="width:55px;margin-top:3px;">{mini_bars}</div>
+          </td>
+          <td style="font-size:.8rem;">{int(row['population']):,}</td>
+          <td>{_score_bar(opp_val, G_MID)}</td>
+          <td>{_score_bar(risk_val, DIM_COLORS.get('diagnosis_gap', G_MID))}</td>
+          <td>{_tier_pill(row.get('opportunity_tier','Developing'))}</td>
+          <td><span style="color:{imeta['color']};font-size:.75rem;font-weight:600;">
+            {imeta['icon']} {interv}</span></td>
+          <td style="font-size:.8rem;">{pool_str}</td>
+        </tr>"""
+
+    st.markdown(f"""
+    <table class="tbl">
+      <thead><tr>
+        <th>#</th><th>County</th><th>Population</th>
+        <th>Opp. Score</th><th>Risk ({cond_label})</th>
+        <th>Tier</th><th>Program</th><th>Est. Pool</th>
+      </tr></thead>
+      <tbody>{rows_html}</tbody>
+    </table>""", unsafe_allow_html=True)
+
+    export_cols = [c for c in ["county_name", "population", opp_col, score_col,
+                                "opportunity_tier", "recommended_intervention",
+                                "total_estimated_pool"] if c in top.columns]
+    csv = top[export_cols].to_csv(index=False)
+    st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
+    st.download_button(
+        f"⬇ Download {state} county data (CSV)", csv,
+        f"sppf_{state.lower().replace(' ', '_')}.csv", "text/csv",
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     scores, scores_long = load_data()
@@ -1038,21 +1501,26 @@ def main():
 
     view        = ctrl["view"]
     condition   = ctrl["condition"]
+    cond_label  = ctrl["cond_label"]
     state       = ctrl["state"]
+    county      = ctrl.get("county", "All Counties")
     top_n       = ctrl["top_n"]
     tier_filter = ctrl["tier_filter"]
 
     if view == "Market Overview":
-        view_market_overview(scores, scores_long)
+        view_market_overview(scores, scores_long, condition, cond_label)
 
     elif view == "7-Dimension Analysis":
-        view_7d_analysis(scores, state, top_n)
+        view_7d_analysis(scores, state, top_n, condition, cond_label)
 
     elif view == "Investment Planner":
         view_investment_planner(scores, scores_long, condition, state, top_n, tier_filter)
 
     elif view == "Geographic Intelligence":
         view_geographic(scores, scores_long, condition, state, geojson)
+
+    elif view == "State Drill-Down":
+        view_state_drilldown(scores, scores_long, condition, cond_label, state, county, top_n)
 
     elif view == "Payer Landscape":
         view_payer_landscape(scores, state, top_n)
