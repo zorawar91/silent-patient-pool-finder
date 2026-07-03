@@ -138,7 +138,7 @@ def run(
     )
     wide = wide.merge(top_signal_map, on="county_fips", how="left")
 
-    # Add estimated undiagnosed pool from ground truth
+    # Add estimated undiagnosed pool from ground truth (synthetic fallback)
     pool_by_county = (
         ground_truth.groupby("county_fips")["estimated_undiagnosed_pool"]
         .sum()
@@ -146,6 +146,55 @@ def run(
         .rename(columns={"estimated_undiagnosed_pool": "total_estimated_pool"})
     )
     wide = wide.merge(pool_by_county, on="county_fips", how="left")
+
+    # ------------------------------------------------------------------
+    # Recalculate pool estimate from real CDC prevalence when available
+    # ------------------------------------------------------------------
+    # Published CDC undiagnosis rates (NHANES 2017-2020, CDC Diabetes Statistics 2024):
+    #   T2D:             23.1% of total diabetics are undiagnosed
+    #   Hypertension:    ~20% are uncontrolled/undiagnosed
+    #   Hypothyroidism:  ~50% undiagnosed (estimated, literature range 40-60%)
+    #
+    # Formula: undiagnosed_pool = population × adult_fraction × diagnosed_rate
+    #          × (undiag_frac / (1 - undiag_frac))
+    #
+    # CDC PLACES reports DIAGNOSED prevalence, so we back-calculate total:
+    #   total_T2D = diagnosed / (1 - 0.231)
+    #   undiagnosed_T2D = total_T2D × 0.231 = diagnosed × 0.300
+    ADULT_FRACTION = 0.78   # ~78% of US county population is 18+ (Census)
+    T2D_UNDIAG_MULTIPLIER  = 0.231 / (1 - 0.231)  # ≈ 0.300
+    HTN_UNDIAG_MULTIPLIER  = 0.200 / (1 - 0.200)  # ≈ 0.250
+    HYPO_PREV_RATE         = 0.047                  # 4.7% general population (ATA estimate)
+    HYPO_UNDIAG_MULTIPLIER = 0.500 / (1 - 0.500)  # ≈ 1.000
+
+    if "diabetes_prevalence_pct" in wide.columns:
+        pop = wide["population"].fillna(50_000)
+        adults = pop * ADULT_FRACTION
+
+        # T2D undiagnosed pool
+        t2d_diag_rate = wide["diabetes_prevalence_pct"].fillna(0.113)
+        t2d_pool = adults * t2d_diag_rate * T2D_UNDIAG_MULTIPLIER
+
+        # Hypertension undiagnosed pool (if available)
+        if "hypertension_prevalence_pct" in wide.columns:
+            htn_diag_rate = wide["hypertension_prevalence_pct"].fillna(0.47)
+            htn_pool = adults * htn_diag_rate * HTN_UNDIAG_MULTIPLIER
+        else:
+            htn_pool = adults * 0.47 * HTN_UNDIAG_MULTIPLIER
+
+        # Hypothyroidism (no county-level prevalence available — use national rate)
+        hypo_pool = adults * HYPO_PREV_RATE * HYPO_UNDIAG_MULTIPLIER
+
+        real_pool = (t2d_pool + htn_pool + hypo_pool).clip(lower=0).round().astype(int)
+        wide["total_estimated_pool"] = real_pool
+
+        log.info(
+            f"Pool estimates recalculated from CDC prevalence data. "
+            f"Median pool: {real_pool.median():,.0f}; "
+            f"Total US undiagnosed estimate: {real_pool.sum():,.0f}"
+        )
+    else:
+        log.info("Using synthetic pool estimates (CDC PLACES not loaded)")
 
     # ------------------------------------------------------------------
     # Merge 7-dimension scores if available
