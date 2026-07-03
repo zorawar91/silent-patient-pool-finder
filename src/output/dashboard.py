@@ -535,9 +535,9 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
     col_hist, col_interv = st.columns([1.4, 1])
 
     with col_hist:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="sec-head">Opportunity Score Distribution</div>', unsafe_allow_html=True)
-        st.markdown('<div class="sec-sub">How the 3,000+ US counties distribute across the 0–100 opportunity scale</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ch"><div class="sec-head">Opportunity Score Distribution</div>'
+                    '<div class="sec-sub">How the 3,000+ US counties distribute across the 0–100 opportunity scale</div></div>',
+                    unsafe_allow_html=True)
         fig = go.Figure()
         fig.add_trace(go.Histogram(
             x=scores[opp_col],
@@ -562,12 +562,11 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
             margin=dict(l=0, r=0, t=20, b=30), height=260,
         )
         st.plotly_chart(fig, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
     with col_interv:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="sec-head">Recommended Interventions</div>', unsafe_allow_html=True)
-        st.markdown('<div class="sec-sub">What program type does each county need?</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ch"><div class="sec-head">Recommended Interventions</div>'
+                    '<div class="sec-sub">What program type does each county need?</div></div>',
+                    unsafe_allow_html=True)
 
         if "recommended_intervention" in scores.columns:
             mix = scores["recommended_intervention"].value_counts()
@@ -604,12 +603,10 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
               <div style="margin-left:auto;font-size:.73rem;font-weight:700;color:{DARK};">{cnt}</div>
             </div>""", unsafe_allow_html=True)
 
-        st.markdown('</div>', unsafe_allow_html=True)
-
     # Patient funnel
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown('<div class="sec-head">Patient Identification Funnel</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sec-sub">From total adult population to actionable screening opportunity</div>', unsafe_allow_html=True)
+    st.markdown('<div class="ch"><div class="sec-head">Patient Identification Funnel</div>'
+                '<div class="sec-sub">From total adult population to actionable screening opportunity</div></div>',
+                unsafe_allow_html=True)
 
     funnel_labels = ["US Adult Population", "Estimated Prevalence\n(T2D+HTN+Hypo)",
                      "Estimated Undiagnosed", "Observable via Proxy Signals", "Actionable via Programs"]
@@ -627,7 +624,6 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
         plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
     )
     st.plotly_chart(fig3, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ── View 2: 7-Dimension Analysis ─────────────────────────────────────────────
@@ -848,9 +844,9 @@ def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
     col_prog, col_roi = st.columns([1, 1])
 
     with col_prog:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="sec-head">Program Mix Recommendation</div>', unsafe_allow_html=True)
-        st.markdown('<div class="sec-sub">Which program type to deploy in each priority county</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ch"><div class="sec-head">Program Mix Recommendation</div>'
+                    '<div class="sec-sub">Which program type to deploy in each priority county</div></div>',
+                    unsafe_allow_html=True)
 
         prog_counts = top["recommended_intervention"].value_counts().reset_index()
         prog_counts.columns = ["program", "counties"]
@@ -880,12 +876,11 @@ def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
               <div style="font-size:.75rem;font-weight:700;color:{DARK};">{meta['icon']} {prow['program']}</div>
               <div style="font-size:.7rem;color:{MUTED};margin-top:2px;">{meta['desc']}</div>
             </div>""", unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
     with col_roi:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="sec-head">Estimated Screening Yield</div>', unsafe_allow_html=True)
-        st.markdown('<div class="sec-sub">Patients newly diagnosed per 1,000 screened by program type (literature benchmarks)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ch"><div class="sec-head">Estimated Screening Yield</div>'
+                    '<div class="sec-sub">Patients newly diagnosed per 1,000 screened by program type (literature benchmarks)</div></div>',
+                    unsafe_allow_html=True)
 
         roi_data = pd.DataFrame({
             "Program": ["Payer Partnership Program", "Community Health Center Partnership",
@@ -924,14 +919,13 @@ def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
         )
         st.plotly_chart(fig2, use_container_width=True)
         st.markdown('<div style="font-size:.7rem;color:{MUTED};margin-top:.5rem;">⚠️ Yield figures based on published screening program literature. Actual results vary by market.</div>'.format(MUTED=MUTED), unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
 
     # Priority county table
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown(f'<div class="sec-head">Priority County Investment List</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sec-sub">Ranked by composite opportunity score. Use this to brief market access teams and payer strategy leads.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="ch"><div class="sec-head">Priority County Investment List</div>'
+                '<div class="sec-sub">Ranked by composite opportunity score. Use this to brief market access teams and payer strategy leads.</div></div>',
+                unsafe_allow_html=True)
 
     rows_html = ""
     for i, (_, row) in enumerate(top.iterrows()):
@@ -978,7 +972,6 @@ def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
       <tbody>{rows_html}</tbody>
     </table>""", unsafe_allow_html=True)
 
-    st.markdown('</div>', unsafe_allow_html=True)
     st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
 
     export_cols = [c for c in ["county_name","state_name","population",opp_col,
@@ -1148,9 +1141,9 @@ def view_payer_landscape(scores: pd.DataFrame, state: str, top_n: int):
     col_scatter, col_mix = st.columns([1.5, 1])
 
     with col_scatter:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="sec-head">Payer Mix vs. Opportunity Score</div>', unsafe_allow_html=True)
-        st.markdown('<div class="sec-sub">Each dot = a county. Size = population. Color = opportunity score.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ch"><div class="sec-head">Payer Mix vs. Opportunity Score</div>'
+                    '<div class="sec-sub">Each dot = a county. Size = population. Color = opportunity score.</div></div>',
+                    unsafe_allow_html=True)
 
         plot_data = filtered.nlargest(min(500, len(filtered)), opp_col).copy()
         plot_data["ma_pct"]  = plot_data["ma_penetration_rate"] * 100
@@ -1182,12 +1175,11 @@ def view_payer_landscape(scores: pd.DataFrame, state: str, top_n: int):
                                     bgcolor="white", bordercolor=BORDER, borderwidth=1),
         )
         st.plotly_chart(fig, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
     with col_mix:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="sec-head">National Payer Mix</div>', unsafe_allow_html=True)
-        st.markdown('<div class="sec-sub">Average payer distribution across all counties in view</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ch"><div class="sec-head">National Payer Mix</div>'
+                    '<div class="sec-sub">Average payer distribution across all counties in view</div></div>',
+                    unsafe_allow_html=True)
 
         fig2 = go.Figure(go.Pie(
             labels=["Medicare Advantage", "Medicaid", "Commercial", "Other/Uninsured"],
@@ -1219,12 +1211,11 @@ def view_payer_landscape(scores: pd.DataFrame, state: str, top_n: int):
             <div style="font-size:.7rem;color:{MUTED};">→ Employer Wellness or Digital Health</div>
           </div>
         </div>""", unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
 
         # Top MA penetration counties
-        st.markdown('<div class="card"><div class="sec-head">Top MA Counties</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ch"><div class="sec-head">Top MA Counties</div></div>', unsafe_allow_html=True)
         top_ma = (filtered.nlargest(min(top_n//2, 8), "ma_penetration_rate")
                   [["county_name","state_name","ma_penetration_rate",opp_col]].copy())
         for _, mrow in top_ma.iterrows():
@@ -1242,7 +1233,6 @@ def view_payer_landscape(scores: pd.DataFrame, state: str, top_n: int):
                 <div style="font-size:.68rem;color:{MUTED};">Opp: {opp_val:.0f}</div>
               </div>
             </div>""", unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ── County Scorecard Helper ───────────────────────────────────────────────────
@@ -1295,8 +1285,8 @@ def _render_county_scorecard(row: pd.Series, opp_col: str,
 
         def _dim_section(keys, container):
             with container:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.markdown('<div class="sec-head">7-Dimension Profile</div>', unsafe_allow_html=True)
+                st.markdown('<div class="ch"><div class="sec-head">7-Dimension Profile</div></div>',
+                            unsafe_allow_html=True)
                 for k in keys:
                     val   = float(row.get(f"dim_{k}", 0))
                     color = DIM_COLORS[k]
@@ -1309,7 +1299,6 @@ def _render_county_scorecard(row: pd.Series, opp_col: str,
                       </div>
                       <div class="dim-num">{val:.0f}</div>
                     </div>""", unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
 
         _dim_section(left, col_a)
         _dim_section(right, col_b)
@@ -1350,10 +1339,8 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
         state_ranks = (scores.groupby("state_name")[opp_col].mean()
                        .sort_values(ascending=False).head(5).reset_index())
         st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="sec-head">Top 5 States by Avg Opportunity Score</div>',
-                    unsafe_allow_html=True)
-        st.markdown('<div class="sec-sub">Select one in the sidebar to drill in</div>',
+        st.markdown('<div class="ch"><div class="sec-head">Top 5 States by Avg Opportunity Score</div>'
+                    '<div class="sec-sub">Select one in the sidebar to drill in</div></div>',
                     unsafe_allow_html=True)
         for i, r in state_ranks.iterrows():
             st.markdown(f"""
@@ -1368,7 +1355,6 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
               <div style="font-size:.83rem;font-weight:700;color:{G_DARK};min-width:2.5rem;text-align:right;">
                 {r[opp_col]:.0f}</div>
             </div>""", unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
         return
 
     # ── State selected ────────────────────────────────────────────────────────
@@ -1413,9 +1399,9 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
     col_chart, col_right = st.columns([2.5, 1])
 
     with col_chart:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown(f'<div class="sec-head">County Rankings — {state}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="sec-sub">Sorted by Opportunity Score · Risk column: {cond_label} · Dotted lines = tier thresholds</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="ch"><div class="sec-head">County Rankings — {state}</div>'
+                    f'<div class="sec-sub">Sorted by Opportunity Score · Risk column: {cond_label} · Dotted lines = tier thresholds</div></div>',
+                    unsafe_allow_html=True)
 
         ranked = state_df.sort_values(opp_col, ascending=True).copy()
         tier_colors = {"Priority": RED, "Emerging": AMBER, "Developing": G_LIGHT}
@@ -1443,12 +1429,11 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
             yaxis=dict(tickfont=dict(size=10)),
         )
         st.plotly_chart(fig, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
     with col_right:
         # Tier donut
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="sec-head">Tier Split</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ch"><div class="sec-head">Tier Split</div></div>',
+                    unsafe_allow_html=True)
         if "opportunity_tier" in state_df.columns:
             tc = state_df["opportunity_tier"].astype(str).value_counts()
             fig2 = go.Figure(go.Pie(
@@ -1460,13 +1445,12 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
             fig2.update_layout(margin=dict(l=0,r=0,t=0,b=0), height=190,
                                paper_bgcolor="white", showlegend=False)
             st.plotly_chart(fig2, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
 
         # Program mix
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="sec-head">Program Mix</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ch"><div class="sec-head">Program Mix</div></div>',
+                    unsafe_allow_html=True)
         if "recommended_intervention" in state_df.columns:
             prog_counts = state_df["recommended_intervention"].value_counts()
             for prog, cnt in prog_counts.items():
@@ -1484,13 +1468,12 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
                                 border-radius:2px;"></div>
                   </div>
                 </div>""", unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
 
         # Condition breakdown
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="sec-head">By Condition</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ch"><div class="sec-head">By Condition</div></div>',
+                    unsafe_allow_html=True)
         for ckey, cmeta in COND_META.items():
             col_name = f"{ckey}_risk_score"
             if col_name not in state_df.columns:
@@ -1511,15 +1494,12 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
               </div>
               <div style="font-size:.67rem;color:{MUTED};">{hi} high-risk</div>
             </div>""", unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
     # ── Full county table ─────────────────────────────────────────────────────
     st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown(f'<div class="sec-head">All Counties — {state} ({len(state_df)} total)</div>',
+    st.markdown(f'<div class="ch"><div class="sec-head">All Counties — {state} ({len(state_df)} total)</div>'
+                f'<div class="sec-sub">Sorted by Opportunity Score · Select a county in the sidebar for full deep-dive</div></div>',
                 unsafe_allow_html=True)
-    st.markdown(f'<div class="sec-sub">Sorted by Opportunity Score · '
-                f'Select a county in the sidebar for full deep-dive</div>', unsafe_allow_html=True)
 
     top = state_df.sort_values(opp_col, ascending=False).copy()
     dim_cols_list = [f"dim_{k}" for k in DIM_LABELS]
@@ -1576,7 +1556,6 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
         f"⬇ Download {state} county data (CSV)", csv,
         f"sppf_{state.lower().replace(' ', '_')}.csv", "text/csv",
     )
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
