@@ -68,6 +68,16 @@ DIM_ICONS = {
     "trajectory":           "📈",
 }
 
+DIM_SHORT = {
+    "disease_burden":       "Dis.",
+    "diagnosis_gap":        "Diag.",
+    "access_to_care":       "Access",
+    "social_determinants":  "SES",
+    "payer_landscape":      "Payer",
+    "commercial_readiness": "Comm.",
+    "trajectory":           "Traj.",
+}
+
 STATE_ABBREV = {
     "Alabama":"AL","Alaska":"AK","Arizona":"AZ","Arkansas":"AR","California":"CA",
     "Colorado":"CO","Connecticut":"CT","Delaware":"DE","Florida":"FL","Georgia":"GA",
@@ -181,9 +191,10 @@ st.markdown(f"""<style>
     transform: none !important;
     margin-left: 0 !important;
 }}
-/* Hide the collapse arrow button — sidebar is always shown */
-[data-testid="stSidebar"] button[kind="header"],
-[data-testid="collapsedControl"] {{
+/* Hide ALL sidebar control buttons — collapse arrow, header buttons, etc. */
+[data-testid="stSidebar"] button,
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapsedControl"] {{
     display: none !important;
 }}
 
@@ -708,7 +719,7 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
               <div style="flex:1;display:flex;align-items:center;gap:.35rem;">
                 <div class="dim-bg" style="flex:1;position:relative;">
                   <div class="dim-fill" style="width:{top_val:.0f}%;background:{color};"></div>
-                  <div style="position:absolute;top:-3px;bottom:-3px;left:{nat_val:.0f}%;width:2px;background:{MUTED};border-radius:1px;opacity:.7;"></div>
+                  <div style="position:absolute;top:-4px;bottom:-4px;left:{nat_val:.0f}%;width:3px;background:#000000;border-radius:1px;"></div>
                 </div>
                 <div class="dim-num">{top_val:.0f}</div>
                 <div style="font-size:.67rem;width:2.4rem;text-align:right;color:{delta_color};font-weight:700;">{delta_str}</div>
@@ -725,54 +736,72 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
         f'<div class="sec-sub">Each row = a county · Each column = one of the 7 dimensions · Darker = stronger signal</div></div>',
         unsafe_allow_html=True)
 
-    hm_data = top[["county_name", "state_name"] + dim_cols].head(30).copy()
+    hm_data = top[["county_name", "state_name"] + dim_cols].head(25).copy()
     hm_data["state_abbr"]   = hm_data["state_name"].map(STATE_ABBREV).fillna(hm_data["state_name"].str[:2].str.upper())
     hm_data["county_label"] = hm_data["county_name"] + ", " + hm_data["state_abbr"]
-    dim_display  = [DIM_ICONS[k] + " " + DIM_LABELS[k] for k in DIM_LABELS]
 
-    hm_raw  = hm_data.set_index("county_label")[dim_cols].values.astype(float)
+    hm_raw = hm_data[dim_cols].values.astype(float)
 
-    # Normalize each column independently within the shown rows so colour reflects
-    # relative rank per dimension — prevents every column going solid navy when
-    # top counties all score high. Hover still shows real absolute scores.
+    # Per-column normalise for colour (so every column uses the full warm→navy range)
     hm_norm = hm_raw.copy()
     for j in range(hm_norm.shape[1]):
         col = hm_norm[:, j]
         mn, mx = col.min(), col.max()
         hm_norm[:, j] = 100 * (col - mn) / (mx - mn) if mx > mn else np.full_like(col, 50.0)
 
-    diverging_cs = [
-        [0.0,  "#F5C6A0"],
-        [0.25, "#FAE8D8"],
-        [0.5,  "#DEEEF9"],
-        [0.75, "#0077C8"],
-        [1.0,  "#003087"],
-    ]
+    def _cell_color(norm_v: float):
+        """Diverging cell bg + text color. norm_v = 0–100 (relative rank in column)."""
+        v = max(0.0, min(1.0, norm_v / 100.0))
+        if v < 0.5:
+            t = v * 2
+            r = int(0xF5 + (0xDE - 0xF5) * t)
+            g = int(0xC6 + (0xEE - 0xC6) * t)
+            b = int(0xA0 + (0xF9 - 0xA0) * t)
+            txt = "#7A2A0A" if v < 0.25 else "#5A7A9B"
+        else:
+            t = (v - 0.5) * 2
+            r = int(0xDE + (0x00 - 0xDE) * t)
+            g = int(0xEE + (0x30 - 0xEE) * t)
+            b = int(0xF9 + (0x87 - 0xF9) * t)
+            txt = "#003087" if t < 0.4 else "#FFFFFF"
+        return f"#{r:02X}{g:02X}{b:02X}", txt
 
-    fig2 = go.Figure(go.Heatmap(
-        z=hm_norm,
-        customdata=hm_raw,
-        x=dim_display,
-        y=hm_data["county_label"].tolist(),
-        colorscale=diverging_cs,
-        zmin=0, zmax=100,
-        hoverongaps=False,
-        showscale=False,
-        hovertemplate="<b>%{y}</b><br>%{x}: %{customdata:.0f}<extra></extra>",
-    ))
-    fig2.update_layout(
-        margin=dict(l=10, r=10, t=0, b=0),
-        height=max(380, len(hm_data) * 22 + 90),
-        paper_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(side="top", tickfont=dict(size=11), tickangle=-20),
-        yaxis=dict(tickfont=dict(size=10), autorange="reversed"),
+    # Build HTML table
+    dim_keys = list(DIM_LABELS.keys())
+    th_style = (f"padding:7px 10px;font-size:.7rem;font-weight:600;color:{MUTED};"
+                f"text-align:center;border-bottom:2px solid {BORDER};white-space:nowrap;")
+    td_county = (f"padding:6px 10px;font-size:.76rem;color:{DARK};font-weight:500;"
+                 f"border-bottom:1px solid {BORDER};white-space:nowrap;")
+    html = (
+        f'<div style="overflow-x:auto;">'
+        f'<table style="width:100%;border-collapse:collapse;font-family:sans-serif;">'
+        f'<thead><tr>'
+        f'<th style="{th_style}text-align:left;"></th>'
     )
-    st.plotly_chart(fig2, use_container_width=True)
-    st.markdown(
-        f'<div style="font-size:.67rem;color:{MUTED};margin-top:-.3rem;">'
+    for k in dim_keys:
+        html += f'<th style="{th_style}">{DIM_ICONS[k]} {DIM_SHORT[k]}</th>'
+    html += '</tr></thead><tbody>'
+
+    for row_i, row in enumerate(hm_data.itertuples()):
+        html += f'<tr><td style="{td_county}">{row.county_label}</td>'
+        for col_j, k in enumerate(dim_keys):
+            raw_val  = hm_raw[row_i, col_j]
+            norm_val = hm_norm[row_i, col_j]
+            bg, txt  = _cell_color(norm_val)
+            html += (f'<td style="padding:6px 8px;text-align:center;font-size:.78rem;'
+                     f'font-weight:700;background:{bg};color:{txt};'
+                     f'border-bottom:1px solid {BORDER};">'
+                     f'{raw_val:.0f}</td>')
+        html += '</tr>'
+
+    html += (
+        '</tbody></table></div>'
+        f'<div style="font-size:.67rem;color:{MUTED};margin-top:.4rem;">'
         f'  Color = relative rank within shown counties per dimension &nbsp;·&nbsp;'
-        f'  Hover for absolute score &nbsp;·&nbsp; Navy = strongest, warm = weakest'
-        f'</div>', unsafe_allow_html=True)
+        f'  Navy = strongest &nbsp;·&nbsp; Warm = weakest'
+        f'</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
 
 
 # ── View 3: Investment Planner ────────────────────────────────────────────────
