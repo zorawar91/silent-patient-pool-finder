@@ -69,13 +69,51 @@ DIM_ICONS = {
 }
 
 DIM_SHORT = {
-    "disease_burden":       "Dis.",
-    "diagnosis_gap":        "Diag.",
-    "access_to_care":       "Access",
-    "social_determinants":  "SES",
-    "payer_landscape":      "Payer",
-    "commercial_readiness": "Comm.",
-    "trajectory":           "Traj.",
+    "disease_burden":       "Disease Burden",
+    "diagnosis_gap":        "Diagnosis Gap",
+    "access_to_care":       "Access to Care",
+    "social_determinants":  "Social Determinants",
+    "payer_landscape":      "Payer Landscape",
+    "commercial_readiness": "Commercial Readiness",
+    "trajectory":           "Trajectory",
+}
+
+# Tooltip text shown on ℹ hover — used in the heatmap column headers
+DIM_TOOLTIPS = {
+    "disease_burden": (
+        "How large is the total chronic disease burden? Combines diagnosed T2D prevalence, "
+        "obesity rate, hypertension co-occurrence, and poor physical health days from CDC PLACES."
+    ),
+    "diagnosis_gap": (
+        "What fraction of the disease burden remains undiagnosed? Driven by the gap between "
+        "CDC-estimated true prevalence and Medicare-diagnosed rates, low annual checkup rates, "
+        "and uninsured population — counties with low healthcare utilisation score highest."
+    ),
+    "access_to_care": (
+        "Can an identified patient actually get diagnosed and treated? Reflects HRSA primary "
+        "care shortage area (HPSA) designations, FQHC safety-net clinic presence, rural geography, "
+        "and routine checkup utilisation as a proxy for primary care access."
+    ),
+    "social_determinants": (
+        "What structural barriers drive the diagnosis gap? Combines poverty rate, median "
+        "household income, uninsured rate, high school graduation rate, and a racial risk index "
+        "weighted by elevated T2D risk in Black (1.6×) and Hispanic (1.5×) populations (Census ACS)."
+    ),
+    "payer_landscape": (
+        "Who insures these patients, and what are their program funding incentives? High Medicare "
+        "Advantage penetration = Stars quality metric incentives for payer partnerships. High "
+        "Medicaid rate = HEDIS incentives via MCOs. Commercial coverage = employer wellness pathway."
+    ),
+    "commercial_readiness": (
+        "How operationally feasible is it to launch and scale a screening program here? Reflects "
+        "broadband internet access (digital health feasibility), urban vs. rural infrastructure, "
+        "OTC purchasing proxies, and annual checkup rates (existing care relationships to recruit from)."
+    ),
+    "trajectory": (
+        "Is the opportunity growing or shrinking? High score = widening gap. Driven by an ageing "
+        "population (T2D risk increases sharply after 45), rising obesity rates as a leading T2D "
+        "predictor, and rural + high-SDoH counties where investment lags behind need."
+    ),
 }
 
 STATE_ABBREV = {
@@ -775,7 +813,14 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
         f'<th style="{th_style}text-align:left;"></th>'
     )
     for k in dim_keys:
-        html += f'<th style="{th_style}">{DIM_ICONS[k]} {DIM_SHORT[k]}</th>'
+        tip = DIM_TOOLTIPS[k].replace('"', '&quot;')
+        html += (
+            f'<th style="{th_style}">'
+            f'{DIM_ICONS[k]} {DIM_SHORT[k]}&nbsp;'
+            f'<span title="{tip}" style="cursor:help;color:{G_LIGHT};'
+            f'font-size:.72rem;font-weight:400;vertical-align:middle;">ℹ</span>'
+            f'</th>'
+        )
     html += '</tr></thead><tbody>'
 
     for row_i, row in enumerate(hm_data.itertuples()):
