@@ -173,10 +173,14 @@ METRIC_TOOLTIPS = {
 }
 
 
-def _iicon(tip: str) -> str:
-    """Return a classy circular info badge with a CSS hover tooltip."""
+def _iicon(tip: str, pos: str = "position:absolute;top:8px;right:10px;") -> str:
+    """Return a classy circular info badge with a CSS hover tooltip.
+    Default positioning: absolute top-right corner of the nearest relative container.
+    Pass pos='' to render inline (e.g. inside table headers).
+    """
     safe = tip.replace('"', "&quot;").replace("'", "&#39;")
-    return f'<span class="info-tip" data-tip="{safe}">i</span>'
+    style = f' style="{pos}"' if pos else ""
+    return f'<span class="info-tip" data-tip="{safe}"{style}>i</span>'
 
 
 STATE_ABBREV = {
@@ -219,23 +223,25 @@ st.markdown(f"""<style>
 [data-testid="stSidebar"] {{ background:{WHITE}; border-right:1px solid {BORDER}; }}
 
 .card {{ background:{WHITE}; border:1px solid {BORDER}; border-radius:10px;
-         padding:0.8rem 1rem; box-shadow:0 1px 2px rgba(0,0,0,.04); }}
+         padding:0.8rem 1rem; box-shadow:0 1px 2px rgba(0,0,0,.04);
+         position:relative; }}
 .card-dark {{ background:linear-gradient(135deg,{G_DARK},{G_MID}); border:none;
-              border-radius:10px; padding:0.8rem 1rem; color:{WHITE}; }}
+              border-radius:10px; padding:0.8rem 1rem; color:{WHITE};
+              position:relative; }}
 .card-blue {{ background:linear-gradient(135deg,#1E3A5F,#2D6A9F); border:none;
-              border-radius:10px; padding:0.8rem 1rem; color:{WHITE}; }}
+              border-radius:10px; padding:0.8rem 1rem; color:{WHITE};
+              position:relative; }}
 /* chart-head: lightweight section label above a chart — no white box */
 .ch {{ border-left:3px solid {G_LIGHT}; padding:.35rem .75rem; margin-bottom:.4rem;
-       background:rgba(0,169,224,.04); border-radius:0 6px 6px 0; }}
+       background:rgba(0,169,224,.04); border-radius:0 6px 6px 0;
+       position:relative; }}
 .ch .sec-head {{ margin-bottom:.15rem; }}
 .ch .sec-sub  {{ margin-bottom:0; }}
 
 .big-num   {{ font-size:2rem; font-weight:800; line-height:1; color:{DARK}; }}
 .big-num-w {{ font-size:2rem; font-weight:800; line-height:1; color:{WHITE}; }}
-.label     {{ font-size:.7rem; font-weight:700; text-transform:uppercase;
-              letter-spacing:.07em; color:{MUTED}; margin-bottom:.25rem; }}
-.label-w   {{ font-size:.7rem; font-weight:700; text-transform:uppercase;
-              letter-spacing:.07em; color:rgba(255,255,255,.6); margin-bottom:.25rem; }}
+.label     {{ font-size:.7rem; font-weight:700; color:{MUTED}; margin-bottom:.25rem; }}
+.label-w   {{ font-size:.7rem; font-weight:700; color:rgba(255,255,255,.6); margin-bottom:.25rem; }}
 .sub       {{ font-size:.74rem; color:{G_LIGHT}; margin-top:.3rem; font-weight:500; }}
 .sub-w     {{ font-size:.74rem; color:rgba(255,255,255,.7); margin-top:.3rem; }}
 .sub-muted {{ font-size:.74rem; color:{MUTED}; margin-top:.3rem; }}
@@ -244,7 +250,8 @@ st.markdown(f"""<style>
 .sec-sub  {{ font-size:.76rem; color:{MUTED}; margin-top:-.4rem; margin-bottom:.8rem; }}
 
 .banner {{ background:linear-gradient(135deg,{G_DARK} 0%,{G_MID} 55%,{G_LIGHT} 100%);
-           border-radius:16px; padding:1.4rem 2rem; color:{WHITE}; margin-bottom:1.2rem; }}
+           border-radius:16px; padding:1.4rem 2rem; color:{WHITE}; margin-bottom:1.2rem;
+           position:relative; }}
 .banner-title {{ font-size:1rem; font-weight:700; opacity:.8; margin-bottom:.2rem; }}
 .banner-stat  {{ font-size:2.4rem; font-weight:900; line-height:1.1; }}
 .banner-note  {{ font-size:.75rem; opacity:.65; margin-top:.25rem; }}
@@ -254,7 +261,6 @@ st.markdown(f"""<style>
 
 .tbl {{ width:100%; border-collapse:collapse; font-size:.83rem; }}
 .tbl th {{ background:{BG}; color:{MUTED}; font-size:.67rem; font-weight:700;
-           text-transform:uppercase; letter-spacing:.06em;
            padding:.55rem .75rem; text-align:left; border-bottom:2px solid {BORDER}; }}
 .tbl td {{ padding:.55rem .75rem; border-bottom:1px solid {BORDER}; color:{DARK};
            vertical-align:middle; }}
@@ -266,7 +272,8 @@ st.markdown(f"""<style>
 .sbar-fill {{ height:100%; border-radius:3px; }}
 .snum      {{ font-weight:700; font-size:.79rem; color:{G_DARK}; min-width:2rem; text-align:right; }}
 
-.dim-bar  {{ display:flex; align-items:center; gap:.5rem; margin-bottom:.45rem; }}
+.dim-bar  {{ display:flex; align-items:center; gap:.5rem; margin-bottom:.45rem;
+             position:relative; padding-right:1.4rem; }}
 .dim-icon {{ font-size:.95rem; width:1.4rem; }}
 .dim-name {{ font-size:.73rem; font-weight:600; color:{DARK}; width:7.5rem; flex-shrink:0; }}
 .dim-bg   {{ flex:1; height:7px; background:{BORDER}; border-radius:4px; overflow:hidden; }}
@@ -861,7 +868,7 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
             bars_html += f"""
             <div class="dim-bar">
               <div class="dim-icon">{icon}</div>
-              <div class="dim-name">{DIM_LABELS[k]}{_iicon(DIM_TOOLTIPS[k])}</div>
+              <div class="dim-name">{DIM_LABELS[k]}</div>
               <div style="flex:1;display:flex;align-items:center;gap:.35rem;">
                 <div class="dim-bg" style="flex:1;position:relative;">
                   <div class="dim-fill" style="width:{top_val:.0f}%;background:{color};"></div>
@@ -870,6 +877,7 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
                 <div class="dim-num">{top_val:.0f}</div>
                 <div style="font-size:.67rem;width:2.4rem;text-align:right;color:{delta_color};font-weight:700;">{delta_str}</div>
               </div>
+              {_iicon(DIM_TOOLTIPS[k], pos="position:absolute;top:50%;right:0;transform:translateY(-50%);")}
             </div>"""
         bars_html += '</div>'
         st.markdown(bars_html, unsafe_allow_html=True)
@@ -915,7 +923,8 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
     # Build HTML table
     dim_keys = list(DIM_LABELS.keys())
     th_style = (f"padding:7px 10px;font-size:.7rem;font-weight:600;color:{MUTED};"
-                f"text-align:center;border-bottom:2px solid {BORDER};white-space:nowrap;")
+                f"text-align:center;border-bottom:2px solid {BORDER};white-space:nowrap;"
+                f"position:relative;padding-right:22px;")
     td_county = (f"padding:6px 10px;font-size:.76rem;color:{DARK};font-weight:500;"
                  f"border-bottom:1px solid {BORDER};white-space:nowrap;")
     html = (
