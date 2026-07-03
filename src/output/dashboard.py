@@ -168,21 +168,23 @@ st.markdown(f"""<style>
 
 #MainMenu, footer, header {{ visibility:hidden; }}
 
-/* ── Always keep sidebar toggle button accessible ── */
-[data-testid="collapsedControl"] {{
-    display: flex !important;
+/* ── Sidebar: always visible, non-collapsible ── */
+[data-testid="stSidebar"] {{
+    min-width: 17rem !important;
+    transform: none !important;
     visibility: visible !important;
-    opacity: 1 !important;
-    background: {WHITE};
-    border: 1px solid {BORDER};
-    border-radius: 0 8px 8px 0;
-    box-shadow: 2px 0 6px rgba(0,0,0,.06);
+    display: block !important;
+    margin-left: 0 !important;
 }}
-[data-testid="collapsedControl"] svg {{ color: {G_DARK} !important; }}
-button[data-testid="baseButton-header"] {{
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
+[data-testid="stSidebar"][aria-expanded="false"] {{
+    min-width: 17rem !important;
+    transform: none !important;
+    margin-left: 0 !important;
+}}
+/* Hide the collapse arrow button — sidebar is always shown */
+[data-testid="stSidebar"] button[kind="header"],
+[data-testid="collapsedControl"] {{
+    display: none !important;
 }}
 
 /* ── Fix: force sidebar text visible regardless of Streamlit theme ── */
