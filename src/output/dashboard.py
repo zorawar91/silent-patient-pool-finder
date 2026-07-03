@@ -116,6 +116,69 @@ DIM_TOOLTIPS = {
     ),
 }
 
+METRIC_TOOLTIPS = {
+    "opportunity_score":
+        "Composite 0–100 score combining all 7 dimensions with published weights: "
+        "Disease Burden 20%, Diagnosis Gap 25%, Access to Care 15%, Social Determinants 15%, "
+        "Payer Landscape 10%, Commercial Readiness 10%, Trajectory 5%. "
+        "Higher score = stronger case for program investment.",
+    "priority_tier":
+        "Opportunity Score ≥ 70. These counties have the highest burden, widest diagnosis gap, "
+        "and strongest payer incentives. Prioritise for immediate program launch and budget allocation.",
+    "emerging_tier":
+        "Opportunity Score 40–70. Strong indicators with some gaps — e.g. access barriers or "
+        "lower payer readiness. Recommended for pipeline development and forward planning.",
+    "developing_tier":
+        "Opportunity Score < 40. Lower immediate priority. Monitor for shifts in disease burden, "
+        "payer landscape, or demographic trajectory that may elevate these counties.",
+    "est_pool":
+        "Estimated adults living with an undiagnosed chronic condition in this geography. "
+        "Calculated as: county adults × CDC-diagnosed prevalence × published undiagnosis rate. "
+        "T2D: 23.1% undiagnosed (CDC NHANES 2017–2020). HTN: ~20%. Hypothyroidism: ~50% (ATA).",
+    "counties_scored":
+        "Total US counties with a valid Opportunity Score. The SPPF covers all 3,143 US counties "
+        "and county-equivalents, scored using CDC PLACES, Census ACS, HRSA, and CMS open data.",
+    "avg_opp_score":
+        "Mean Opportunity Score across all counties in the current view. "
+        "Use as a baseline when comparing individual county scores — "
+        "anything above this average indicates above-average unmet need.",
+    "top_state":
+        "State with the highest average Opportunity Score across all its counties. "
+        "Useful for prioritising state-level payer contract negotiations.",
+    "payer_mix":
+        "Breakdown of insurance coverage types across the county. "
+        "Medicare Advantage (MA) plans have Stars quality metric incentives to fund screening. "
+        "Medicaid MCOs have HEDIS incentives. Commercial = employer wellness channel.",
+    "ma_penetration":
+        "Medicare Advantage penetration rate — the share of Medicare-eligible patients enrolled "
+        "in an MA plan. High penetration (>40%) = strong Stars program incentive for payers "
+        "to fund screening and care management partnerships.",
+    "screening_yield":
+        "Estimated number of patients newly diagnosed per 1,000 screened, based on published "
+        "literature for each program type. Reflects program efficiency before cost considerations.",
+    "recommended_intervention":
+        "Program type recommended based on the county's dimension profile. Matches the highest-ROI "
+        "channel given payer mix, SDoH burden, access infrastructure, and commercial readiness.",
+    "national_radar":
+        "Spider/radar chart comparing average dimension scores. Navy polygon = top opportunity "
+        "counties. Light polygon = all US counties. Larger area = stronger composite profile.",
+    "patient_funnel":
+        "Estimated patient pathway from total adult population down to actionable screening "
+        "opportunity. Each stage applies a national conversion rate: disease prevalence → "
+        "undiagnosed fraction → detectable via proxy signals → reachable by programs.",
+    "risk_score":
+        "XGBoost-predicted geography risk score (0–100) for this specific condition. "
+        "Trained on OTC proxy patterns, diagnostic orphan ratios, HCP prescribing signals, "
+        "and geographic burden indices. Separate from the composite Opportunity Score.",
+}
+
+
+def _iicon(tip: str) -> str:
+    """Return a classy circular info badge with a CSS hover tooltip."""
+    safe = tip.replace('"', "&quot;").replace("'", "&#39;")
+    return f'<span class="info-tip" data-tip="{safe}">i</span>'
+
+
 STATE_ABBREV = {
     "Alabama":"AL","Alaska":"AK","Arizona":"AZ","Arkansas":"AR","California":"CA",
     "Colorado":"CO","Connecticut":"CT","Delaware":"DE","Florida":"FL","Georgia":"GA",
@@ -215,6 +278,55 @@ st.markdown(f"""<style>
 .tier-developing{{ background:{G_PALE}; color:{G_DARK}; }}
 
 #MainMenu, footer, header {{ visibility:hidden; }}
+
+/* ── Info icon with CSS tooltip ──────────────────────────── */
+.info-tip {{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:15px; height:15px; border-radius:50%;
+    background:linear-gradient(135deg,{G_MID},{G_LIGHT});
+    color:#fff; font-size:.6rem; font-style:italic; font-weight:800;
+    font-family:Georgia,serif; cursor:help; position:relative;
+    vertical-align:middle; margin-left:4px; flex-shrink:0;
+    box-shadow:0 1px 5px rgba(0,119,200,.35);
+    transition:transform .15s,box-shadow .15s;
+    line-height:1; user-select:none;
+}}
+.info-tip:hover {{
+    transform:scale(1.2);
+    box-shadow:0 3px 10px rgba(0,119,200,.55);
+}}
+.info-tip::after {{
+    content:attr(data-tip);
+    position:absolute;
+    bottom:calc(100% + 10px);
+    left:50%;
+    transform:translateX(-50%);
+    background:{DARK};
+    color:#fff;
+    padding:10px 14px;
+    border-radius:10px;
+    font-size:.72rem; font-weight:400; font-style:normal;
+    line-height:1.55; width:270px; white-space:normal;
+    z-index:99999; opacity:0; pointer-events:none;
+    transition:opacity .18s ease;
+    box-shadow:0 8px 28px rgba(0,0,0,.28);
+    border:1px solid rgba(255,255,255,.08);
+    letter-spacing:.01em; text-align:left;
+}}
+.info-tip::before {{
+    content:'';
+    position:absolute;
+    bottom:calc(100% + 4px); left:50%;
+    transform:translateX(-50%);
+    border:6px solid transparent;
+    border-top-color:{DARK};
+    z-index:99999; opacity:0; pointer-events:none;
+    transition:opacity .18s ease;
+}}
+.info-tip:hover::after,
+.info-tip:hover::before {{ opacity:1; }}
+/* ensure tooltips are never clipped */
+.stMarkdown, [data-testid="stMarkdownContainer"] {{ overflow:visible !important; }}
 
 /* ── Sidebar: always visible, non-collapsible ── */
 [data-testid="stSidebar"] {{
@@ -516,7 +628,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
 
     st.markdown(f"""
     <div class="banner">
-      <div class="banner-title">Total Estimated Undiagnosed Patient Pool — United States</div>
+      <div class="banner-title">Total Estimated Undiagnosed Patient Pool — United States {_iicon(METRIC_TOOLTIPS["est_pool"])}</div>
       <div class="banner-stat">{total_pool/1_000_000:.1f}M</div>
       <div class="banner-note">
         Across Type 2 Diabetes, Hypertension &amp; Hyperthyroidism ·
@@ -527,13 +639,13 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
 
     # KPI strip
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.markdown(f'<div class="card-dark"><div class="label-w">Counties Scored</div><div class="big-num-w">{len(scores):,}</div><div class="sub-w">US county coverage</div></div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority Markets</div><div class="big-num" style="color:{RED};">{priority_n}</div><div class="sub" style="color:{RED};">Opportunity Score ≥70</div></div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Emerging Markets</div><div class="big-num" style="color:{AMBER};">{emerging_n}</div><div class="sub" style="color:{AMBER};">Score 40–70</div></div>', unsafe_allow_html=True)
+    c1.markdown(f'<div class="card-dark"><div class="label-w">Counties Scored{_iicon(METRIC_TOOLTIPS["counties_scored"])}</div><div class="big-num-w">{len(scores):,}</div><div class="sub-w">US county coverage</div></div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority Markets{_iicon(METRIC_TOOLTIPS["priority_tier"])}</div><div class="big-num" style="color:{RED};">{priority_n}</div><div class="sub" style="color:{RED};">Opportunity Score ≥70</div></div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Emerging Markets{_iicon(METRIC_TOOLTIPS["emerging_tier"])}</div><div class="big-num" style="color:{AMBER};">{emerging_n}</div><div class="sub" style="color:{AMBER};">Score 40–70</div></div>', unsafe_allow_html=True)
     avg_opp = scores[opp_col].mean()
-    c4.markdown(f'<div class="card" style="border-top:3px solid {G_LIGHT};"><div class="label">Avg Opportunity Score</div><div class="big-num" style="color:{G_DARK};">{avg_opp:.0f}</div><div class="sub-muted">national baseline</div></div>', unsafe_allow_html=True)
+    c4.markdown(f'<div class="card" style="border-top:3px solid {G_LIGHT};"><div class="label">Avg Opportunity Score{_iicon(METRIC_TOOLTIPS["avg_opp_score"])}</div><div class="big-num" style="color:{G_DARK};">{avg_opp:.0f}</div><div class="sub-muted">national baseline</div></div>', unsafe_allow_html=True)
     top_state = scores.groupby("state_name")[opp_col].mean().idxmax()
-    c5.markdown(f'<div class="card" style="border-top:3px solid {BLUE};"><div class="label">Top State</div><div style="font-size:1.3rem;font-weight:800;color:{DARK};">{top_state}</div><div class="sub-muted">by avg opp. score</div></div>', unsafe_allow_html=True)
+    c5.markdown(f'<div class="card" style="border-top:3px solid {BLUE};"><div class="label">Top State{_iicon(METRIC_TOOLTIPS["top_state"])}</div><div style="font-size:1.3rem;font-weight:800;color:{DARK};">{top_state}</div><div class="sub-muted">by avg opp. score</div></div>', unsafe_allow_html=True)
 
     st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
 
@@ -602,8 +714,8 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
         st.plotly_chart(fig, use_container_width=True)
 
     with col_interv:
-        st.markdown('<div class="ch"><div class="sec-head">Recommended Interventions</div>'
-                    '<div class="sec-sub">What program type does each county need?</div></div>',
+        st.markdown(f'<div class="ch"><div class="sec-head">Recommended Interventions{_iicon(METRIC_TOOLTIPS["recommended_intervention"])}</div>'
+                    f'<div class="sec-sub">What program type does each county need?</div></div>',
                     unsafe_allow_html=True)
 
         if "recommended_intervention" in scores.columns:
@@ -642,8 +754,8 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
             </div>""", unsafe_allow_html=True)
 
     # Patient funnel
-    st.markdown('<div class="ch"><div class="sec-head">Patient Identification Funnel</div>'
-                '<div class="sec-sub">From total adult population to actionable screening opportunity</div></div>',
+    st.markdown(f'<div class="ch"><div class="sec-head">Patient Identification Funnel{_iicon(METRIC_TOOLTIPS["patient_funnel"])}</div>'
+                f'<div class="sec-sub">From total adult population to actionable screening opportunity</div></div>',
                 unsafe_allow_html=True)
 
     funnel_labels = ["US Adult Population", "Estimated Prevalence\n(T2D+HTN+Hypo)",
@@ -693,8 +805,8 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
     col_radar, col_bars = st.columns([1, 1])
 
     with col_radar:
-        st.markdown('<div class="ch"><div class="sec-head">National Radar</div>'
-                    '<div class="sec-sub">All counties vs. top opportunity counties</div></div>',
+        st.markdown(f'<div class="ch"><div class="sec-head">National Radar{_iicon(METRIC_TOOLTIPS["national_radar"])}</div>'
+                    f'<div class="sec-sub">All counties vs. top opportunity counties</div></div>',
                     unsafe_allow_html=True)
         dim_avgs_national = scores[dim_cols].mean()
         dim_avgs_top      = top[dim_cols].mean()
@@ -749,7 +861,7 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
             bars_html += f"""
             <div class="dim-bar">
               <div class="dim-icon">{icon}</div>
-              <div class="dim-name">{DIM_LABELS[k]}</div>
+              <div class="dim-name">{DIM_LABELS[k]}{_iicon(DIM_TOOLTIPS[k])}</div>
               <div style="flex:1;display:flex;align-items:center;gap:.35rem;">
                 <div class="dim-bg" style="flex:1;position:relative;">
                   <div class="dim-fill" style="width:{top_val:.0f}%;background:{color};"></div>
@@ -813,12 +925,9 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
         f'<th style="{th_style}text-align:left;"></th>'
     )
     for k in dim_keys:
-        tip = DIM_TOOLTIPS[k].replace('"', '&quot;')
         html += (
             f'<th style="{th_style}">'
-            f'{DIM_ICONS[k]} {DIM_SHORT[k]}&nbsp;'
-            f'<span title="{tip}" style="cursor:help;color:{G_LIGHT};'
-            f'font-size:.72rem;font-weight:400;vertical-align:middle;">ℹ</span>'
+            f'{DIM_ICONS[k]} {DIM_SHORT[k]}{_iicon(DIM_TOOLTIPS[k])}'
             f'</th>'
         )
     html += '</tr></thead><tbody>'
@@ -923,8 +1032,8 @@ def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
             </div>""", unsafe_allow_html=True)
 
     with col_roi:
-        st.markdown('<div class="ch"><div class="sec-head">Estimated Screening Yield</div>'
-                    '<div class="sec-sub">Patients newly diagnosed per 1,000 screened by program type (literature benchmarks)</div></div>',
+        st.markdown(f'<div class="ch"><div class="sec-head">Estimated Screening Yield{_iicon(METRIC_TOOLTIPS["screening_yield"])}</div>'
+                    f'<div class="sec-sub">Patients newly diagnosed per 1,000 screened by program type (literature benchmarks)</div></div>',
                     unsafe_allow_html=True)
 
         roi_data = pd.DataFrame({
@@ -1186,8 +1295,8 @@ def view_payer_landscape(scores: pd.DataFrame, state: str, top_n: int):
     col_scatter, col_mix = st.columns([1.5, 1])
 
     with col_scatter:
-        st.markdown('<div class="ch"><div class="sec-head">Payer Mix vs. Opportunity Score</div>'
-                    '<div class="sec-sub">Each dot = a county. Size = population. Color = opportunity score.</div></div>',
+        st.markdown(f'<div class="ch"><div class="sec-head">Payer Mix vs. Opportunity Score{_iicon(METRIC_TOOLTIPS["payer_mix"])}</div>'
+                    f'<div class="sec-sub">Each dot = a county. Size = population. Color = opportunity score.</div></div>',
                     unsafe_allow_html=True)
 
         plot_data = filtered.nlargest(min(500, len(filtered)), opp_col).copy()
@@ -1222,8 +1331,8 @@ def view_payer_landscape(scores: pd.DataFrame, state: str, top_n: int):
         st.plotly_chart(fig, use_container_width=True)
 
     with col_mix:
-        st.markdown('<div class="ch"><div class="sec-head">National Payer Mix</div>'
-                    '<div class="sec-sub">Average payer distribution across all counties in view</div></div>',
+        st.markdown(f'<div class="ch"><div class="sec-head">National Payer Mix{_iicon(METRIC_TOOLTIPS["payer_mix"])}</div>'
+                    f'<div class="sec-sub">Average payer distribution across all counties in view</div></div>',
                     unsafe_allow_html=True)
 
         fig2 = go.Figure(go.Pie(
