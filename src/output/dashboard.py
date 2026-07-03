@@ -381,14 +381,14 @@ st.markdown(f"""<style>
 .info-tip::after {{
     content:attr(data-tip);
     position:absolute;
-    top:calc(100% + 10px);
-    right:0; left:auto; transform:none;
+    top:50%; transform:translateY(-50%);
+    right:calc(100% + 12px); left:auto;
     background:{DARK};
     color:#fff;
     padding:10px 14px;
     border-radius:10px;
     font-size:.72rem; font-weight:400; font-style:normal;
-    line-height:1.55; width:270px; white-space:normal;
+    line-height:1.55; width:260px; white-space:normal;
     z-index:99999; opacity:0; pointer-events:none;
     transition:opacity .18s ease;
     box-shadow:0 8px 28px rgba(0,0,0,.28);
@@ -398,9 +398,10 @@ st.markdown(f"""<style>
 .info-tip::before {{
     content:'';
     position:absolute;
-    top:calc(100% + 4px); right:3px; left:auto; transform:none;
+    top:50%; transform:translateY(-50%);
+    right:calc(100% + 0px); left:auto;
     border:6px solid transparent;
-    border-bottom-color:{DARK};
+    border-left-color:{DARK};
     z-index:99999; opacity:0; pointer-events:none;
     transition:opacity .18s ease;
 }}
