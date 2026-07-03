@@ -68,6 +68,20 @@ DIM_ICONS = {
     "trajectory":           "📈",
 }
 
+STATE_ABBREV = {
+    "Alabama":"AL","Alaska":"AK","Arizona":"AZ","Arkansas":"AR","California":"CA",
+    "Colorado":"CO","Connecticut":"CT","Delaware":"DE","Florida":"FL","Georgia":"GA",
+    "Hawaii":"HI","Idaho":"ID","Illinois":"IL","Indiana":"IN","Iowa":"IA",
+    "Kansas":"KS","Kentucky":"KY","Louisiana":"LA","Maine":"ME","Maryland":"MD",
+    "Massachusetts":"MA","Michigan":"MI","Minnesota":"MN","Mississippi":"MS",
+    "Missouri":"MO","Montana":"MT","Nebraska":"NE","Nevada":"NV","New Hampshire":"NH",
+    "New Jersey":"NJ","New Mexico":"NM","New York":"NY","North Carolina":"NC",
+    "North Dakota":"ND","Ohio":"OH","Oklahoma":"OK","Oregon":"OR","Pennsylvania":"PA",
+    "Rhode Island":"RI","South Carolina":"SC","South Dakota":"SD","Tennessee":"TN",
+    "Texas":"TX","Utah":"UT","Vermont":"VT","Virginia":"VA","Washington":"WA",
+    "West Virginia":"WV","Wisconsin":"WI","Wyoming":"WY","District of Columbia":"DC",
+}
+
 INTERV_META = {
     "Payer Partnership Program":         {"color": BLUE,   "icon": "💳",
         "desc": "MA plan has Stars incentive — partner to fund screening & care management"},
@@ -654,40 +668,31 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
         # Build all bars in ONE markdown call so the card wrapper encloses its content
         bars_html = (
             f'<div class="card"><div class="sec-head">Dimension Breakdown</div>'
-            f'<div style="display:flex;gap:1rem;align-items:center;margin-bottom:.6rem;margin-top:.2rem;">'
-            f'  <div style="display:flex;align-items:center;gap:.35rem;">'
-            f'    <div style="width:18px;height:7px;border-radius:3px;background:{BORDER};"></div>'
-            f'    <span style="font-size:.67rem;color:{MUTED};">National avg</span>'
-            f'  </div>'
-            f'  <div style="display:flex;align-items:center;gap:.35rem;">'
-            f'    <div style="width:18px;height:7px;border-radius:3px;background:{G_MID};"></div>'
-            f'    <span style="font-size:.67rem;color:{DARK};font-weight:600;">Top {len(top)}</span>'
-            f'  </div>'
+            f'<div style="font-size:.67rem;color:{MUTED};margin-bottom:.65rem;margin-top:.15rem;">'
+            f'  <span style="border-left:2px solid {MUTED};padding-left:4px;margin-right:.7rem;">national avg</span>'
+            f'  <span style="font-weight:600;color:{DARK};">● top {len(top)} score &nbsp; +/− vs national</span>'
             f'</div>'
         )
         for k in DIM_LABELS:
-            col_key = f"dim_{k}"
-            nat_val = dim_avgs_national[col_key]
-            top_val = dim_avgs_top[col_key]
-            color   = DIM_COLORS[k]
-            icon    = DIM_ICONS[k]
+            col_key  = f"dim_{k}"
+            nat_val  = dim_avgs_national[col_key]
+            top_val  = dim_avgs_top[col_key]
+            color    = DIM_COLORS[k]
+            icon     = DIM_ICONS[k]
+            delta    = top_val - nat_val
+            delta_str   = f"+{delta:.0f}" if delta >= 0 else f"{delta:.0f}"
+            delta_color = "#16a34a" if delta >= 0 else "#dc2626"
             bars_html += f"""
             <div class="dim-bar">
               <div class="dim-icon">{icon}</div>
               <div class="dim-name">{DIM_LABELS[k]}</div>
-              <div style="flex:1;">
-                <div style="display:flex;gap:.3rem;align-items:center;margin-bottom:3px;">
-                  <div class="dim-bg" style="flex:1;">
-                    <div class="dim-fill" style="width:{nat_val:.0f}%;background:{BORDER};"></div>
-                  </div>
-                  <div class="dim-num" style="color:{MUTED};">{nat_val:.0f}</div>
+              <div style="flex:1;display:flex;align-items:center;gap:.35rem;">
+                <div class="dim-bg" style="flex:1;position:relative;">
+                  <div class="dim-fill" style="width:{top_val:.0f}%;background:{color};"></div>
+                  <div style="position:absolute;top:-3px;bottom:-3px;left:{nat_val:.0f}%;width:2px;background:{MUTED};border-radius:1px;opacity:.7;"></div>
                 </div>
-                <div style="display:flex;gap:.3rem;align-items:center;">
-                  <div class="dim-bg" style="flex:1;">
-                    <div class="dim-fill" style="width:{top_val:.0f}%;background:{color};"></div>
-                  </div>
-                  <div class="dim-num">{top_val:.0f}</div>
-                </div>
+                <div class="dim-num">{top_val:.0f}</div>
+                <div style="font-size:.67rem;width:2.4rem;text-align:right;color:{delta_color};font-weight:700;">{delta_str}</div>
               </div>
             </div>"""
         bars_html += '</div>'
@@ -702,27 +707,51 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
         unsafe_allow_html=True)
 
     hm_data = top[["county_name", "state_name"] + dim_cols].head(30).copy()
-    hm_data["county_label"] = hm_data["county_name"] + ", " + hm_data["state_name"].str[:2]
-    hm_matrix = hm_data.set_index("county_label")[dim_cols].values
-    dim_display = [DIM_ICONS[k] + " " + DIM_LABELS[k] for k in DIM_LABELS]
+    hm_data["state_abbr"]   = hm_data["state_name"].map(STATE_ABBREV).fillna(hm_data["state_name"].str[:2].str.upper())
+    hm_data["county_label"] = hm_data["county_name"] + ", " + hm_data["state_abbr"]
+    hm_matrix    = hm_data.set_index("county_label")[dim_cols].values
+    dim_display  = [DIM_ICONS[k] + " " + DIM_LABELS[k] for k in DIM_LABELS]
+
+    # Compute national avg per dimension as the diverging midpoint
+    nat_avgs = scores[dim_cols].mean()
+    zmid     = float(nat_avgs.mean())   # single midpoint for the shared scale
+
+    # Diverging colorscale: warm tint (below avg) → pale (at avg) → IQVIA navy (above avg)
+    diverging_cs = [
+        [0.0,  "#F5C6A0"],   # below avg — warm tint
+        [0.25, "#FAE8D8"],   # approaching avg
+        [0.5,  "#DEEEF9"],   # at national avg — IQVIA pale
+        [0.75, "#0077C8"],   # above avg — IQVIA blue
+        [1.0,  "#003087"],   # well above avg — IQVIA navy
+    ]
 
     fig2 = go.Figure(go.Heatmap(
         z=hm_matrix,
         x=dim_display,
         y=hm_data["county_label"].tolist(),
-        colorscale=[[0, G_PALE], [0.4, G_LIGHT], [0.7, G_MID], [1, G_DARK]],
+        colorscale=diverging_cs,
+        zmid=zmid,
         zmin=0, zmax=100,
         hoverongaps=False,
+        colorbar=dict(
+            title=dict(text="Score", font=dict(size=11)),
+            tickfont=dict(size=10),
+            len=0.85,
+        ),
         hovertemplate="%{y}<br>%{x}: %{z:.0f}<extra></extra>",
     ))
     fig2.update_layout(
-        margin=dict(l=0, r=0, t=0, b=0),
-        height=max(350, len(hm_data) * 20 + 80),
+        margin=dict(l=10, r=10, t=0, b=0),
+        height=max(380, len(hm_data) * 22 + 90),
         paper_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(side="top", tickfont_size=11),
-        yaxis=dict(tickfont_size=10, autorange="reversed"),
+        xaxis=dict(side="top", tickfont=dict(size=11), tickangle=-20),
+        yaxis=dict(tickfont=dict(size=10), autorange="reversed"),
     )
     st.plotly_chart(fig2, use_container_width=True)
+    st.markdown(
+        f'<div style="font-size:.67rem;color:{MUTED};margin-top:-.3rem;">'
+        f'  Warm = below national avg &nbsp;·&nbsp; Pale blue = at avg &nbsp;·&nbsp; Navy = above avg'
+        f'</div>', unsafe_allow_html=True)
 
 
 # ── View 3: Investment Planner ────────────────────────────────────────────────
