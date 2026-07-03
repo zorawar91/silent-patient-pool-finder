@@ -654,7 +654,16 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
         # Build all bars in ONE markdown call so the card wrapper encloses its content
         bars_html = (
             f'<div class="card"><div class="sec-head">Dimension Breakdown</div>'
-            f'<div class="sec-sub">National avg vs. top opportunity counties</div>'
+            f'<div style="display:flex;gap:1rem;align-items:center;margin-bottom:.6rem;margin-top:.2rem;">'
+            f'  <div style="display:flex;align-items:center;gap:.35rem;">'
+            f'    <div style="width:18px;height:7px;border-radius:3px;background:{BORDER};"></div>'
+            f'    <span style="font-size:.67rem;color:{MUTED};">National avg</span>'
+            f'  </div>'
+            f'  <div style="display:flex;align-items:center;gap:.35rem;">'
+            f'    <div style="width:18px;height:7px;border-radius:3px;background:{G_MID};"></div>'
+            f'    <span style="font-size:.67rem;color:{DARK};font-weight:600;">Top {len(top)}</span>'
+            f'  </div>'
+            f'</div>'
         )
         for k in DIM_LABELS:
             col_key = f"dim_{k}"
@@ -667,15 +676,13 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
               <div class="dim-icon">{icon}</div>
               <div class="dim-name">{DIM_LABELS[k]}</div>
               <div style="flex:1;">
-                <div style="display:flex;gap:.3rem;margin-bottom:3px;">
-                  <div style="font-size:.67rem;color:{MUTED};width:3.5rem;">National</div>
+                <div style="display:flex;gap:.3rem;align-items:center;margin-bottom:3px;">
                   <div class="dim-bg" style="flex:1;">
                     <div class="dim-fill" style="width:{nat_val:.0f}%;background:{BORDER};"></div>
                   </div>
                   <div class="dim-num" style="color:{MUTED};">{nat_val:.0f}</div>
                 </div>
-                <div style="display:flex;gap:.3rem;">
-                  <div style="font-size:.67rem;color:{color};font-weight:700;width:3.5rem;">Top {len(top)}</div>
+                <div style="display:flex;gap:.3rem;align-items:center;">
                   <div class="dim-bg" style="flex:1;">
                     <div class="dim-fill" style="width:{top_val:.0f}%;background:{color};"></div>
                   </div>
