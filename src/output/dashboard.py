@@ -239,6 +239,26 @@ def _iicon(tip: str, pos: str = "position:absolute;top:8px;right:10px;") -> str:
     return f'<span class="info-tip" data-tip="{safe}"{style}>i</span>'
 
 
+def _stplot(fig, **kwargs):
+    """Wrapper around st.plotly_chart — applies consistent dark axis colours first."""
+    fig.update_layout(font=dict(color=DARK, family="sans-serif", size=11))
+    fig.update_xaxes(
+        tickfont=dict(color=DARK, size=10),
+        title_font=dict(color=MUTED, size=11),
+        linecolor="#CACFD6",
+        gridcolor="#EAEDF0",
+        zerolinecolor="#CACFD6",
+    )
+    fig.update_yaxes(
+        tickfont=dict(color=DARK, size=10),
+        title_font=dict(color=MUTED, size=11),
+        linecolor="#CACFD6",
+        gridcolor="#EAEDF0",
+        zerolinecolor="#CACFD6",
+    )
+    st.plotly_chart(fig, **kwargs)
+
+
 STATE_ABBREV = {
     "Alabama":"AL","Alaska":"AK","Arizona":"AZ","Arkansas":"AR","California":"CA",
     "Colorado":"CO","Connecticut":"CT","Delaware":"DE","Florida":"FL","Georgia":"GA",
@@ -386,8 +406,15 @@ st.markdown(f"""<style>
 }}
 .info-tip:hover::after,
 .info-tip:hover::before {{ opacity:1; }}
-/* ensure tooltips are never clipped */
-.stMarkdown, [data-testid="stMarkdownContainer"] {{ overflow:visible !important; }}
+/* ensure tooltips are never clipped by any Streamlit container */
+.stMarkdown,
+[data-testid="stMarkdownContainer"],
+[data-testid="column"],
+[data-testid="stHorizontalBlock"],
+[data-testid="stVerticalBlock"],
+[data-testid="stVerticalBlockBorderWrapper"],
+.element-container,
+.block-container {{ overflow:visible !important; }}
 
 /* ── Sidebar: always visible, non-collapsible ── */
 [data-testid="stSidebar"] {{
@@ -774,7 +801,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
             plot_bgcolor="white", paper_bgcolor="white",
             margin=dict(l=0, r=0, t=20, b=30), height=260,
         )
-        st.plotly_chart(fig, use_container_width=True)
+        _stplot(fig, use_container_width=True)
 
     with col_interv:
         st.markdown(f'<div class="ch"><div class="sec-head">Recommended Interventions{_iicon(METRIC_TOOLTIPS["recommended_intervention"])}</div>'
@@ -805,7 +832,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
             margin=dict(l=0,r=0,t=0,b=0), height=180,
             paper_bgcolor="white", showlegend=False,
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        _stplot(fig2, use_container_width=True)
 
         for iname, cnt in mix.items():
             meta = INTERV_META.get(str(iname), {"color": G_MID, "icon": "•"})
@@ -836,7 +863,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
         margin=dict(l=0, r=0, t=0, b=0), height=240,
         plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
     )
-    st.plotly_chart(fig3, use_container_width=True)
+    _stplot(fig3, use_container_width=True)
 
 
 # ── View 2: 7-Dimension Analysis ─────────────────────────────────────────────
@@ -901,7 +928,7 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
             margin=dict(l=30,r=30,t=30,b=50), height=360,
             paper_bgcolor="rgba(0,0,0,0)",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        _stplot(fig, use_container_width=True)
 
     with col_bars:
         # Build all bars in ONE markdown call so the card wrapper encloses its content
@@ -1085,7 +1112,7 @@ def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
             plot_bgcolor="white", paper_bgcolor="white",
             margin=dict(l=0, r=40, t=10, b=30), height=280,
         )
-        st.plotly_chart(fig, use_container_width=True)
+        _stplot(fig, use_container_width=True)
 
         for _, prow in prog_counts.iterrows():
             meta = INTERV_META.get(str(prow["program"]), {"color":G_MID,"icon":"•","desc":""})
@@ -1135,7 +1162,7 @@ def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
             plot_bgcolor="white", paper_bgcolor="white",
             margin=dict(l=0, r=40, t=20, b=80), height=280,
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        _stplot(fig2, use_container_width=True)
         st.markdown('<div style="font-size:.7rem;color:{MUTED};margin-top:.5rem;">⚠️ Yield figures based on published screening program literature. Actual results vary by market.</div>'.format(MUTED=MUTED), unsafe_allow_html=True)
 
     st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
@@ -1269,7 +1296,7 @@ def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
                 ),
                 height=480,
             )
-            st.plotly_chart(fig, use_container_width=True)
+            _stplot(fig, use_container_width=True)
         else:
             state_avg = (filtered.groupby("state_name")[opp_col].mean()
                          .reset_index().sort_values(opp_col, ascending=False).head(20))
@@ -1278,7 +1305,7 @@ def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
                          labels={"state_name":"","opportunity_score":"Avg Opportunity Score"})
             fig.update_layout(plot_bgcolor="white", paper_bgcolor="white",
                                margin=dict(l=0,r=0,t=10,b=0), height=480, coloraxis_showscale=False)
-            st.plotly_chart(fig, use_container_width=True)
+            _stplot(fig, use_container_width=True)
 
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1392,7 +1419,7 @@ def view_payer_landscape(scores: pd.DataFrame, state: str, top_n: int):
             coloraxis_colorbar=dict(title="Opp.", thickness=10, len=0.6,
                                     bgcolor="white", bordercolor=BORDER, borderwidth=1),
         )
-        st.plotly_chart(fig, use_container_width=True)
+        _stplot(fig, use_container_width=True)
 
     with col_mix:
         st.markdown(f'<div class="ch"><div class="sec-head">National Payer Mix{_iicon(METRIC_TOOLTIPS["payer_mix"])}</div>'
@@ -1411,7 +1438,7 @@ def view_payer_landscape(scores: pd.DataFrame, state: str, top_n: int):
             margin=dict(l=0,r=0,t=0,b=0), height=260,
             paper_bgcolor="white", showlegend=False,
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        _stplot(fig2, use_container_width=True)
 
         st.markdown(f"""
         <div style="margin-top:.5rem;">
@@ -1646,7 +1673,7 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
                        title="Opportunity Score"),
             yaxis=dict(tickfont=dict(size=10)),
         )
-        st.plotly_chart(fig, use_container_width=True)
+        _stplot(fig, use_container_width=True)
 
     with col_right:
         # Tier donut
@@ -1662,7 +1689,7 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
             ))
             fig2.update_layout(margin=dict(l=0,r=0,t=0,b=0), height=190,
                                paper_bgcolor="white", showlegend=False)
-            st.plotly_chart(fig2, use_container_width=True)
+            _stplot(fig2, use_container_width=True)
 
         st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
 
