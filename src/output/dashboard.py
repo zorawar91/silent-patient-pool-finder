@@ -168,6 +168,23 @@ st.markdown(f"""<style>
 
 #MainMenu, footer, header {{ visibility:hidden; }}
 
+/* ── Always keep sidebar toggle button accessible ── */
+[data-testid="collapsedControl"] {{
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    background: {WHITE};
+    border: 1px solid {BORDER};
+    border-radius: 0 8px 8px 0;
+    box-shadow: 2px 0 6px rgba(0,0,0,.06);
+}}
+[data-testid="collapsedControl"] svg {{ color: {G_DARK} !important; }}
+button[data-testid="baseButton-header"] {{
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}}
+
 /* ── Fix: force sidebar text visible regardless of Streamlit theme ── */
 [data-testid="stSidebar"] {{ color:{DARK}; }}
 [data-testid="stSidebar"] label {{ color:{DARK} !important; }}
@@ -709,36 +726,37 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
     hm_data = top[["county_name", "state_name"] + dim_cols].head(30).copy()
     hm_data["state_abbr"]   = hm_data["state_name"].map(STATE_ABBREV).fillna(hm_data["state_name"].str[:2].str.upper())
     hm_data["county_label"] = hm_data["county_name"] + ", " + hm_data["state_abbr"]
-    hm_matrix    = hm_data.set_index("county_label")[dim_cols].values
     dim_display  = [DIM_ICONS[k] + " " + DIM_LABELS[k] for k in DIM_LABELS]
 
-    # Compute national avg per dimension as the diverging midpoint
-    nat_avgs = scores[dim_cols].mean()
-    zmid     = float(nat_avgs.mean())   # single midpoint for the shared scale
+    hm_raw  = hm_data.set_index("county_label")[dim_cols].values.astype(float)
 
-    # Diverging colorscale: warm tint (below avg) → pale (at avg) → IQVIA navy (above avg)
+    # Normalize each column independently within the shown rows so colour reflects
+    # relative rank per dimension — prevents every column going solid navy when
+    # top counties all score high. Hover still shows real absolute scores.
+    hm_norm = hm_raw.copy()
+    for j in range(hm_norm.shape[1]):
+        col = hm_norm[:, j]
+        mn, mx = col.min(), col.max()
+        hm_norm[:, j] = 100 * (col - mn) / (mx - mn) if mx > mn else np.full_like(col, 50.0)
+
     diverging_cs = [
-        [0.0,  "#F5C6A0"],   # below avg — warm tint
-        [0.25, "#FAE8D8"],   # approaching avg
-        [0.5,  "#DEEEF9"],   # at national avg — IQVIA pale
-        [0.75, "#0077C8"],   # above avg — IQVIA blue
-        [1.0,  "#003087"],   # well above avg — IQVIA navy
+        [0.0,  "#F5C6A0"],
+        [0.25, "#FAE8D8"],
+        [0.5,  "#DEEEF9"],
+        [0.75, "#0077C8"],
+        [1.0,  "#003087"],
     ]
 
     fig2 = go.Figure(go.Heatmap(
-        z=hm_matrix,
+        z=hm_norm,
+        customdata=hm_raw,
         x=dim_display,
         y=hm_data["county_label"].tolist(),
         colorscale=diverging_cs,
-        zmid=zmid,
         zmin=0, zmax=100,
         hoverongaps=False,
-        colorbar=dict(
-            title=dict(text="Score", font=dict(size=11)),
-            tickfont=dict(size=10),
-            len=0.85,
-        ),
-        hovertemplate="%{y}<br>%{x}: %{z:.0f}<extra></extra>",
+        showscale=False,
+        hovertemplate="<b>%{y}</b><br>%{x}: %{customdata:.0f}<extra></extra>",
     ))
     fig2.update_layout(
         margin=dict(l=10, r=10, t=0, b=0),
@@ -750,7 +768,8 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
     st.plotly_chart(fig2, use_container_width=True)
     st.markdown(
         f'<div style="font-size:.67rem;color:{MUTED};margin-top:-.3rem;">'
-        f'  Warm = below national avg &nbsp;·&nbsp; Pale blue = at avg &nbsp;·&nbsp; Navy = above avg'
+        f'  Color = relative rank within shown counties per dimension &nbsp;·&nbsp;'
+        f'  Hover for absolute score &nbsp;·&nbsp; Navy = strongest, warm = weakest'
         f'</div>', unsafe_allow_html=True)
 
 
