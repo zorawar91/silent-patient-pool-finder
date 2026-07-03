@@ -10,6 +10,7 @@ import os
 import json
 import urllib.request
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import plotly.express as px
@@ -405,17 +406,9 @@ st.markdown(f"""<style>
     z-index:99999; opacity:0; pointer-events:none;
     transition:opacity .18s ease;
 }}
+/* CSS pseudo-element tooltips disabled — handled by JS fixed-position tooltip */
 .info-tip:hover::after,
-.info-tip:hover::before {{ opacity:1; }}
-/* ensure tooltips are never clipped by any Streamlit container */
-.stMarkdown,
-[data-testid="stMarkdownContainer"],
-[data-testid="column"],
-[data-testid="stHorizontalBlock"],
-[data-testid="stVerticalBlock"],
-[data-testid="stVerticalBlockBorderWrapper"],
-.element-container,
-.block-container {{ overflow:visible !important; }}
+.info-tip:hover::before {{ opacity:0 !important; }}
 
 /* ── Sidebar: always visible, non-collapsible ── */
 [data-testid="stSidebar"] {{
@@ -1835,6 +1828,96 @@ def main():
 
     elif view == "Payer Landscape":
         view_payer_landscape(scores, state, top_n)
+
+    # ── Fixed-position JS tooltip (escapes all Streamlit overflow/clip contexts) ──
+    components.html("""
+<script>
+(function() {
+  var doc = window.parent.document;
+
+  // Create singleton tooltip div at body level (position:fixed escapes all clipping)
+  var tt = doc.getElementById('sppf-tt');
+  if (!tt) {
+    tt = doc.createElement('div');
+    tt.id = 'sppf-tt';
+    Object.assign(tt.style, {
+      position:       'fixed',
+      background:     '#0A1F3C',
+      color:          '#fff',
+      padding:        '10px 14px',
+      borderRadius:   '10px',
+      fontSize:       '0.72rem',
+      fontFamily:     'sans-serif',
+      fontWeight:     '400',
+      lineHeight:     '1.55',
+      letterSpacing:  '0.01em',
+      textAlign:      'left',
+      width:          '260px',
+      maxWidth:       '80vw',
+      whiteSpace:     'normal',
+      boxShadow:      '0 8px 28px rgba(0,0,0,0.32)',
+      border:         '1px solid rgba(255,255,255,0.10)',
+      zIndex:         '2147483647',
+      opacity:        '0',
+      pointerEvents:  'none',
+      transition:     'opacity 0.18s ease',
+    });
+    doc.body.appendChild(tt);
+  }
+
+  function showTip(icon) {
+    var tip = icon.getAttribute('data-tip');
+    if (!tip) return;
+    tt.textContent = tip;
+    tt.style.opacity = '0';
+    tt.style.display = 'block';
+
+    var r = icon.getBoundingClientRect();
+    var vw = window.parent.innerWidth;
+    var vh = window.parent.innerHeight;
+    var ttW = 260;
+
+    // Try to place to the LEFT of icon; fall back to right if no room
+    var left = r.left - ttW - 12;
+    if (left < 8) left = r.right + 12;
+    // Clamp right edge
+    if (left + ttW > vw - 8) left = vw - ttW - 8;
+
+    // Vertically centre on icon; then clamp within viewport
+    var top = r.top + r.height / 2;
+    tt.style.left = left + 'px';
+    tt.style.top  = top + 'px';
+    tt.style.transform = 'translateY(-50%)';
+
+    // After layout, nudge if bottom clips
+    requestAnimationFrame(function() {
+      var ttH = tt.offsetHeight;
+      var bot = top - ttH/2 + ttH;
+      if (bot > vh - 8) top = vh - 8 - ttH/2;
+      if (top - ttH/2 < 8) top = 8 + ttH/2;
+      tt.style.top = top + 'px';
+      tt.style.opacity = '1';
+    });
+  }
+
+  function hideTip() { tt.style.opacity = '0'; }
+
+  function attach() {
+    doc.querySelectorAll('.info-tip:not([data-tt])').forEach(function(icon) {
+      icon.setAttribute('data-tt', '1');
+      icon.addEventListener('mouseenter', function() { showTip(icon); });
+      icon.addEventListener('mouseleave',  hideTip);
+      icon.addEventListener('click',       hideTip);
+    });
+  }
+
+  attach();
+  // Re-attach after Streamlit re-renders (it re-mounts DOM nodes)
+  var obs = new MutationObserver(attach);
+  obs.observe(doc.body, { childList: true, subtree: true });
+})();
+</script>
+""", height=0)
 
 
 if __name__ == "__main__":
