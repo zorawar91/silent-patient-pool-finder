@@ -170,6 +170,62 @@ METRIC_TOOLTIPS = {
         "XGBoost-predicted geography risk score (0–100) for this specific condition. "
         "Trained on OTC proxy patterns, diagnostic orphan ratios, HCP prescribing signals, "
         "and geographic burden indices. Separate from the composite Opportunity Score.",
+    "opp_score_dist":
+        "Distribution of Opportunity Scores across all 3,143 US counties. "
+        "The two vertical lines mark the tier cut-offs: Emerging (≥40) and Priority (≥70). "
+        "A right-skewed distribution means most counties have moderate opportunity; "
+        "counties past the Priority line represent the highest-yield markets.",
+    "condition_t2d":
+        "Type 2 Diabetes (T2D) — 8.7M estimated undiagnosed adults nationally. "
+        "CDC NHANES 2017–2020 shows 23.1% of all T2D cases are undiagnosed. "
+        "Priority counties = geography risk score ≥ 70. Avg risk score = mean across all scored counties.",
+    "condition_htn":
+        "Hypertension (HTN) — 34.9M estimated undiagnosed or uncontrolled adults nationally. "
+        "~20% of hypertensive adults are unaware of their diagnosis. "
+        "HTN frequently co-occurs with T2D, amplifying the combined screening opportunity.",
+    "condition_hypo":
+        "Hypothyroidism — 2.1M estimated undiagnosed adults nationally. "
+        "ATA estimates ~50% of hypothyroid cases remain undiagnosed. "
+        "Underdiagnosis is highest in rural counties with low checkup rates and limited endocrinology access.",
+    "program_mix":
+        "Recommended program type for each county, derived from its dimension profile. "
+        "Counties with high MA penetration → Payer Partnership. "
+        "High SDoH + low access → Community Health Center. "
+        "High commercial + urban → Employer Wellness or Digital Health.",
+    "priority_county_list":
+        "Ranked list of counties by composite Opportunity Score. "
+        "Use this to build market access briefing packs, allocate field resources, "
+        "and prioritise payer contract negotiations. "
+        "Est. Pool = combined undiagnosed T2D + HTN + Hypothyroidism adults in that county.",
+    "opp_map":
+        "Choropleth map shading every US county by its composite Opportunity Score (0–100). "
+        "Darker navy = stronger opportunity. Hover a county for its score, tier, "
+        "estimated undiagnosed pool, and recommended program type.",
+    "top_states":
+        "States ranked by average Opportunity Score across all their counties. "
+        "A high-scoring state signals a structurally favourable market — "
+        "high disease burden, wide diagnosis gap, and strong payer incentives — "
+        "making it a priority for state-level payer negotiations.",
+    "by_condition":
+        "Average geography risk score per condition across the current county selection. "
+        "A high HTN average with a lower T2D average, for example, suggests the market is "
+        "more favourable for hypertension screening programs than diabetes programs.",
+    "avg_ma_penetration":
+        "Average Medicare Advantage (MA) penetration rate across counties in the current view. "
+        "MA plans have Stars quality metric incentives to fund early screening and care management. "
+        "Counties above 40% MA penetration are strong candidates for payer partnership programs.",
+    "avg_medicaid":
+        "Average Medicaid share of the population across counties in the current view. "
+        "High Medicaid rates indicate HEDIS measure incentives via Managed Care Organisations (MCOs). "
+        "These counties benefit from Community Health Center partnership programs tied to MCO contracts.",
+    "avg_commercial":
+        "Average commercial (employer/individual) insurance share across counties in the current view. "
+        "High commercial coverage = employer wellness and digital health pathways. "
+        "These markets typically have higher patient engagement and broadband access.",
+    "high_ma_counties":
+        "Number of counties with Medicare Advantage penetration ≥ 45%. "
+        "These represent the highest-priority markets for payer-funded screening partnerships, "
+        "as MA plans have strong Stars incentive to fund diabetes and hypertension detection programs.",
 }
 
 
@@ -305,9 +361,8 @@ st.markdown(f"""<style>
 .info-tip::after {{
     content:attr(data-tip);
     position:absolute;
-    bottom:calc(100% + 10px);
-    left:50%;
-    transform:translateX(-50%);
+    top:calc(100% + 10px);
+    right:0; left:auto; transform:none;
     background:{DARK};
     color:#fff;
     padding:10px 14px;
@@ -323,10 +378,9 @@ st.markdown(f"""<style>
 .info-tip::before {{
     content:'';
     position:absolute;
-    bottom:calc(100% + 4px); left:50%;
-    transform:translateX(-50%);
+    top:calc(100% + 4px); right:3px; left:auto; transform:none;
     border:6px solid transparent;
-    border-top-color:{DARK};
+    border-bottom-color:{DARK};
     z-index:99999; opacity:0; pointer-events:none;
     transition:opacity .18s ease;
 }}
@@ -658,6 +712,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
 
     # Condition cards
     col1, col2, col3 = st.columns(3)
+    _cond_tip_keys = {"t2d": "condition_t2d", "htn": "condition_htn", "hyperthyroidism": "condition_hypo"}
     for col, (ckey, meta) in zip([col1, col2, col3], COND_META.items()):
         score_col = f"{ckey}_risk_score"
         high_risk = int((scores[score_col] >= 70).sum()) if score_col in scores.columns else 0
@@ -667,6 +722,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
         col.markdown(f"""
         <div class="card" style="border-top:3px solid {meta['color']};">
           <div class="label">{meta['label']}</div>
+          {_iicon(METRIC_TOOLTIPS[_cond_tip_keys[ckey]])}
           <div class="big-num">{est_pool}</div>
           <div class="sub" style="color:{meta['color']};">estimated undiagnosed nationally</div>
           <hr style="border:none;border-top:1px solid {BORDER};margin:.7rem 0;">
@@ -692,8 +748,8 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
     col_hist, col_interv = st.columns([1.4, 1])
 
     with col_hist:
-        st.markdown('<div class="ch"><div class="sec-head">Opportunity Score Distribution</div>'
-                    '<div class="sec-sub">How the 3,000+ US counties distribute across the 0–100 opportunity scale</div></div>',
+        st.markdown(f'<div class="ch"><div class="sec-head">Opportunity Score Distribution{_iicon(METRIC_TOOLTIPS["opp_score_dist"])}</div>'
+                    f'<div class="sec-sub">How the 3,000+ US counties distribute across the 0–100 opportunity scale</div></div>',
                     unsafe_allow_html=True)
         fig = go.Figure()
         fig.add_trace(go.Histogram(
@@ -923,8 +979,7 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
     # Build HTML table
     dim_keys = list(DIM_LABELS.keys())
     th_style = (f"padding:7px 10px;font-size:.7rem;font-weight:600;color:{MUTED};"
-                f"text-align:center;border-bottom:2px solid {BORDER};white-space:nowrap;"
-                f"position:relative;padding-right:22px;")
+                f"text-align:center;border-bottom:2px solid {BORDER};white-space:nowrap;")
     td_county = (f"padding:6px 10px;font-size:.76rem;color:{DARK};font-weight:500;"
                  f"border-bottom:1px solid {BORDER};white-space:nowrap;")
     html = (
@@ -936,7 +991,7 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
     for k in dim_keys:
         html += (
             f'<th style="{th_style}">'
-            f'{DIM_ICONS[k]} {DIM_SHORT[k]}{_iicon(DIM_TOOLTIPS[k])}'
+            f'{DIM_ICONS[k]} {DIM_SHORT[k]}'
             f'</th>'
         )
     html += '</tr></thead><tbody>'
@@ -1007,8 +1062,8 @@ def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
     col_prog, col_roi = st.columns([1, 1])
 
     with col_prog:
-        st.markdown('<div class="ch"><div class="sec-head">Program Mix Recommendation</div>'
-                    '<div class="sec-sub">Which program type to deploy in each priority county</div></div>',
+        st.markdown(f'<div class="ch"><div class="sec-head">Program Mix Recommendation{_iicon(METRIC_TOOLTIPS["program_mix"])}</div>'
+                    f'<div class="sec-sub">Which program type to deploy in each priority county</div></div>',
                     unsafe_allow_html=True)
 
         prog_counts = top["recommended_intervention"].value_counts().reset_index()
@@ -1086,8 +1141,8 @@ def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
     st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
 
     # Priority county table
-    st.markdown('<div class="ch"><div class="sec-head">Priority County Investment List</div>'
-                '<div class="sec-sub">Ranked by composite opportunity score. Use this to brief market access teams and payer strategy leads.</div></div>',
+    st.markdown(f'<div class="ch"><div class="sec-head">Priority County Investment List{_iicon(METRIC_TOOLTIPS["priority_county_list"])}</div>'
+                f'<div class="sec-sub">Ranked by composite opportunity score. Use this to brief market access teams and payer strategy leads.</div></div>',
                 unsafe_allow_html=True)
 
     rows_html = ""
@@ -1170,7 +1225,7 @@ def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
     col_map, col_right = st.columns([2.8, 1])
 
     with col_map:
-        st.markdown(f'<div class="card"><div class="sec-head">Opportunity Map — {cond_label}</div><div class="sec-sub">Shading = composite opportunity score. Hover for county profile.</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="card"><div class="sec-head">Opportunity Map — {cond_label}{_iicon(METRIC_TOOLTIPS["opp_map"])}</div><div class="sec-sub">Shading = composite opportunity score. Hover for county profile.</div>', unsafe_allow_html=True)
 
         # Build intervention mapping
         if "recommended_intervention" not in filtered.columns:
@@ -1229,7 +1284,7 @@ def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
 
     with col_right:
         # Top states
-        st.markdown('<div class="card"><div class="sec-head">Top States</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="card"><div class="sec-head">Top States{_iicon(METRIC_TOOLTIPS["top_states"])}</div>', unsafe_allow_html=True)
         state_avgs = (filtered.groupby("state_name")[opp_col].mean()
                       .reset_index().sort_values(opp_col, ascending=False).head(10))
         for _, srow in state_avgs.iterrows():
@@ -1250,7 +1305,7 @@ def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
         st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
 
         # Condition breakdown
-        st.markdown('<div class="card"><div class="sec-head">By Condition</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="card"><div class="sec-head">By Condition{_iicon(METRIC_TOOLTIPS["by_condition"])}</div>', unsafe_allow_html=True)
         for ckey, cmeta in COND_META.items():
             col_name = f"{ckey}_risk_score"
             if col_name not in filtered.columns:
@@ -1294,10 +1349,10 @@ def view_payer_landscape(scores: pd.DataFrame, state: str, top_n: int):
     ma_high = int((filtered["ma_penetration_rate"] >= 0.45).sum())
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(f'<div class="card-blue"><div class="label-w">Avg MA Penetration</div><div class="big-num-w">{ma_avg:.0f}%</div><div class="sub-w">Medicare Advantage</div></div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="card" style="border-top:3px solid {PURPLE};"><div class="label">Avg Medicaid Rate</div><div class="big-num">{med_avg:.0f}%</div><div class="sub-muted">of population</div></div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Avg Commercial Rate</div><div class="big-num">{com_avg:.0f}%</div><div class="sub-muted">employer/individual</div></div>', unsafe_allow_html=True)
-    c4.markdown(f'<div class="card" style="border-top:3px solid {BLUE};"><div class="label">High MA Counties</div><div class="big-num">{ma_high}</div><div class="sub" style="color:{BLUE};">≥45% MA penetration</div></div>', unsafe_allow_html=True)
+    c1.markdown(f'<div class="card-blue"><div class="label-w">Avg MA Penetration</div>{_iicon(METRIC_TOOLTIPS["avg_ma_penetration"])}<div class="big-num-w">{ma_avg:.0f}%</div><div class="sub-w">Medicare Advantage</div></div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="card" style="border-top:3px solid {PURPLE};"><div class="label">Avg Medicaid Rate</div>{_iicon(METRIC_TOOLTIPS["avg_medicaid"])}<div class="big-num">{med_avg:.0f}%</div><div class="sub-muted">of population</div></div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Avg Commercial Rate</div>{_iicon(METRIC_TOOLTIPS["avg_commercial"])}<div class="big-num">{com_avg:.0f}%</div><div class="sub-muted">employer/individual</div></div>', unsafe_allow_html=True)
+    c4.markdown(f'<div class="card" style="border-top:3px solid {BLUE};"><div class="label">High MA Counties</div>{_iicon(METRIC_TOOLTIPS["high_ma_counties"])}<div class="big-num">{ma_high}</div><div class="sub" style="color:{BLUE};">≥45% MA penetration</div></div>', unsafe_allow_html=True)
 
     st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
 
