@@ -81,166 +81,195 @@ DIM_SHORT = {
 # Tooltip text shown on ℹ hover — used in the heatmap column headers
 DIM_TOOLTIPS = {
     "disease_burden": (
-        "How large is the total chronic disease burden? Combines diagnosed T2D prevalence, "
-        "obesity rate, hypertension co-occurrence, and poor physical health days from CDC PLACES."
+        "How large is the total chronic disease burden in this county? "
+        "Combines diagnosed Type 2 Diabetes prevalence, obesity rate, hypertension "
+        "co-occurrence, and poor physical health days from the CDC county health survey."
     ),
     "diagnosis_gap": (
-        "What fraction of the disease burden remains undiagnosed? Driven by the gap between "
-        "CDC-estimated true prevalence and Medicare-diagnosed rates, low annual checkup rates, "
-        "and uninsured population — counties with low healthcare utilisation score highest."
+        "What share of disease cases remain undiagnosed? High scores reflect a large gap "
+        "between estimated true disease prevalence and the number of diagnosed patients, "
+        "combined with low annual checkup rates and a high uninsured population — "
+        "counties where many patients have never been tested."
     ),
     "access_to_care": (
-        "Can an identified patient actually get diagnosed and treated? Reflects HRSA primary "
-        "care shortage area (HPSA) designations, FQHC safety-net clinic presence, rural geography, "
-        "and routine checkup utilisation as a proxy for primary care access."
+        "How easily can a patient get diagnosed and treated here? Reflects federal primary "
+        "care shortage designations, the presence of federally funded safety-net clinics, "
+        "rural geography, and the rate of routine checkups as a proxy for primary care access."
     ),
     "social_determinants": (
-        "What structural barriers drive the diagnosis gap? Combines poverty rate, median "
-        "household income, uninsured rate, high school graduation rate, and a racial risk index "
-        "weighted by elevated T2D risk in Black (1.6×) and Hispanic (1.5×) populations (Census ACS)."
+        "What structural factors drive underdiagnosis? Combines poverty rate, household "
+        "income, uninsured rate, and high school graduation rate. Also applies a risk "
+        "uplift for counties with larger Black and Hispanic populations, who face "
+        "statistically higher rates of undiagnosed Type 2 Diabetes (source: US Census)."
     ),
     "payer_landscape": (
-        "Who insures these patients, and what are their program funding incentives? High Medicare "
-        "Advantage penetration = Stars quality metric incentives for payer partnerships. High "
-        "Medicaid rate = HEDIS incentives via MCOs. Commercial coverage = employer wellness pathway."
+        "Who insures patients in this county, and how does that create program funding "
+        "opportunities? High Medicare Advantage enrollment gives insurers financial "
+        "incentives to fund early screening. High Medicaid share unlocks managed care "
+        "contract pathways. High commercial coverage suits employer wellness programs."
     ),
     "commercial_readiness": (
-        "How operationally feasible is it to launch and scale a screening program here? Reflects "
-        "broadband internet access (digital health feasibility), urban vs. rural infrastructure, "
-        "OTC purchasing proxies, and annual checkup rates (existing care relationships to recruit from)."
+        "How feasible is it to launch and scale a screening program here? Reflects "
+        "broadband internet access, urban versus rural infrastructure, over-the-counter "
+        "health product sales as a proxy for health-seeking behavior, and annual checkup "
+        "rates as a measure of existing care relationships to recruit patients from."
     ),
     "trajectory": (
-        "Is the opportunity growing or shrinking? High score = widening gap. Driven by an ageing "
-        "population (T2D risk increases sharply after 45), rising obesity rates as a leading T2D "
-        "predictor, and rural + high-SDoH counties where investment lags behind need."
+        "Is the undiagnosed patient opportunity growing or shrinking? High scores reflect "
+        "a widening gap driven by an aging population (Type 2 Diabetes risk rises sharply "
+        "after age 45), rising obesity rates, and counties where healthcare investment "
+        "has not kept pace with rising disease burden."
     ),
 }
 
 METRIC_TOOLTIPS = {
     "opportunity_score":
-        "Composite 0–100 score combining all 7 dimensions with published weights: "
+        "Composite score from 0 to 100 combining all 7 dimensions with the following weights: "
         "Disease Burden 20%, Diagnosis Gap 25%, Access to Care 15%, Social Determinants 15%, "
         "Payer Landscape 10%, Commercial Readiness 10%, Trajectory 5%. "
-        "Higher score = stronger case for program investment.",
+        "A higher score means a stronger case for program investment in that county.",
     "priority_tier":
-        "Opportunity Score ≥ 70. These counties have the highest burden, widest diagnosis gap, "
-        "and strongest payer incentives. Prioritise for immediate program launch and budget allocation.",
+        "Opportunity Score of 70 or above. These counties have the highest disease burden, "
+        "widest diagnosis gap, and strongest payer funding incentives. "
+        "Prioritize for immediate program launch and budget allocation.",
     "emerging_tier":
-        "Opportunity Score 40–70. Strong indicators with some gaps — e.g. access barriers or "
-        "lower payer readiness. Recommended for pipeline development and forward planning.",
+        "Opportunity Score between 40 and 70. Strong underlying indicators with some gaps — "
+        "such as access barriers or lower payer readiness. "
+        "Recommended for pipeline development and forward planning.",
     "developing_tier":
-        "Opportunity Score < 40. Lower immediate priority. Monitor for shifts in disease burden, "
-        "payer landscape, or demographic trajectory that may elevate these counties.",
+        "Opportunity Score below 40. Lower immediate priority. Monitor for shifts in disease "
+        "burden, payer landscape, or demographic trends that may elevate these counties over time.",
     "est_pool":
-        "Estimated adults living with an undiagnosed chronic condition in this geography. "
-        "Calculated as: county adults × CDC-diagnosed prevalence × published undiagnosis rate. "
-        "T2D: 23.1% undiagnosed (CDC NHANES 2017–2020). HTN: ~20%. Hypothyroidism: ~50% (ATA).",
+        "Estimated number of adults living with an undiagnosed chronic condition in this geography. "
+        "Calculated as: county adult population × disease prevalence rate × national undiagnosis rate. "
+        "Type 2 Diabetes: 23.1% of cases undiagnosed. "
+        "Hypertension: approximately 20% undiagnosed. "
+        "Hypothyroidism: approximately 50% undiagnosed.",
     "counties_scored":
-        "Total US counties with a valid Opportunity Score. The SPPF covers all 3,143 US counties "
-        "and county-equivalents, scored using CDC PLACES, Census ACS, HRSA, and CMS open data.",
+        "Total US counties with a valid Opportunity Score. "
+        "The tool covers all 3,143 US counties and county-equivalents, scored using publicly "
+        "available data from the CDC, US Census, the federal Health Resources and Services "
+        "Administration, and the Centers for Medicare and Medicaid Services.",
     "avg_opp_score":
-        "Mean Opportunity Score across all counties in the current view. "
+        "Average Opportunity Score across all counties in the current view. "
         "Use as a baseline when comparing individual county scores — "
-        "anything above this average indicates above-average unmet need.",
+        "any county scoring above this average has above-average unmet diagnostic need.",
     "top_state":
         "State with the highest average Opportunity Score across all its counties. "
-        "Useful for prioritising state-level payer contract negotiations.",
+        "Useful for prioritizing state-level payer contract negotiations.",
     "payer_mix":
         "Breakdown of insurance coverage types across the county. "
-        "Medicare Advantage (MA) plans have Stars quality metric incentives to fund screening. "
-        "Medicaid MCOs have HEDIS incentives. Commercial = employer wellness channel.",
+        "Medicare Advantage insurers have financial incentives to fund early screening programs. "
+        "Medicaid managed care contracts create similar incentives. "
+        "High commercial coverage suits employer wellness program partnerships.",
     "ma_penetration":
-        "Medicare Advantage penetration rate — the share of Medicare-eligible patients enrolled "
-        "in an MA plan. High penetration (>40%) = strong Stars program incentive for payers "
-        "to fund screening and care management partnerships.",
+        "Share of Medicare-eligible patients enrolled in a Medicare Advantage plan. "
+        "Penetration above 40% signals strong insurer incentives to fund screening and "
+        "care management partnerships, as insurers are financially rewarded for "
+        "improving member health outcomes.",
     "screening_yield":
-        "Estimated number of patients newly diagnosed per 1,000 screened, based on published "
-        "literature for each program type. Reflects program efficiency before cost considerations.",
+        "Estimated number of patients newly diagnosed per 1,000 people screened, "
+        "based on published research benchmarks for each program type. "
+        "Reflects how efficiently each program converts screening activity into confirmed diagnoses, "
+        "before accounting for costs.",
     "recommended_intervention":
-        "Program type recommended based on the county's dimension profile. Matches the highest-ROI "
-        "channel given payer mix, SDoH burden, access infrastructure, and commercial readiness.",
+        "Program type recommended based on this county's scoring profile — matching the "
+        "highest-value delivery channel to the county's payer mix, social barriers, "
+        "access infrastructure, and commercial readiness.",
     "national_radar":
-        "Spider/radar chart comparing average dimension scores. Navy polygon = top opportunity "
-        "counties. Light polygon = all US counties. Larger area = stronger composite profile.",
+        "Radar chart comparing average scores across the 7 dimensions. "
+        "The navy shape represents the top opportunity counties; "
+        "the light shape represents all US counties. "
+        "A larger shape indicates a stronger overall profile.",
     "patient_funnel":
         "Estimated patient pathway from total adult population down to actionable screening "
-        "opportunity. Each stage applies a national conversion rate: disease prevalence → "
-        "undiagnosed fraction → detectable via proxy signals → reachable by programs.",
+        "opportunity. Each step applies a national rate: total adults to disease prevalence, "
+        "to undiagnosed fraction, to detectable via indirect signals, to reachable by programs.",
     "risk_score":
-        "XGBoost-predicted geography risk score (0–100) for this specific condition. "
-        "Trained on OTC proxy patterns, diagnostic orphan ratios, HCP prescribing signals, "
-        "and geographic burden indices. Separate from the composite Opportunity Score.",
+        "Machine learning-predicted geography risk score from 0 to 100 for this specific condition. "
+        "Based on patterns in over-the-counter product sales, gaps in diagnosed patient counts, "
+        "physician prescribing signals, and geographic disease burden indices. "
+        "This is separate from the composite Opportunity Score.",
     "opp_score_dist":
         "Distribution of Opportunity Scores across all 3,143 US counties. "
-        "The two vertical lines mark the tier cut-offs: Emerging (≥40) and Priority (≥70). "
-        "A right-skewed distribution means most counties have moderate opportunity; "
-        "counties past the Priority line represent the highest-yield markets.",
+        "Blue bars are lower-scoring developing counties, amber bars are emerging markets "
+        "(score 40 to 70), and red bars are priority markets (score 70 and above). "
+        "Most counties cluster in the moderate range; the red bars represent the highest-yield markets.",
     "condition_t2d":
-        "Type 2 Diabetes (T2D) — 8.7M estimated undiagnosed adults nationally. "
-        "CDC NHANES 2017–2020 shows 23.1% of all T2D cases are undiagnosed. "
-        "Priority counties = geography risk score ≥ 70. Avg risk score = mean across all scored counties.",
+        "Type 2 Diabetes — approximately 8.7 million estimated undiagnosed adults nationally. "
+        "Research shows 23.1% of all Type 2 Diabetes cases are undiagnosed. "
+        "Priority counties are those with a geography risk score of 70 or above.",
     "condition_htn":
-        "Hypertension (HTN) — 34.9M estimated undiagnosed or uncontrolled adults nationally. "
-        "~20% of hypertensive adults are unaware of their diagnosis. "
-        "HTN frequently co-occurs with T2D, amplifying the combined screening opportunity.",
+        "Hypertension (high blood pressure) — approximately 34.9 million estimated undiagnosed "
+        "or uncontrolled adults nationally. Around 20% of people with hypertension are unaware "
+        "of their diagnosis. Hypertension frequently co-occurs with Type 2 Diabetes, "
+        "increasing the combined screening opportunity.",
     "condition_hypo":
-        "Hypothyroidism — 2.1M estimated undiagnosed adults nationally. "
-        "ATA estimates ~50% of hypothyroid cases remain undiagnosed. "
-        "Underdiagnosis is highest in rural counties with low checkup rates and limited endocrinology access.",
+        "Hypothyroidism — approximately 2.1 million estimated undiagnosed adults nationally. "
+        "Research suggests around 50% of hypothyroid cases remain undiagnosed. "
+        "Underdiagnosis is highest in rural counties with low checkup rates "
+        "and limited access to specialist care.",
     "program_mix":
-        "Recommended program type for each county, derived from its dimension profile. "
-        "Counties with high MA penetration → Payer Partnership. "
-        "High SDoH + low access → Community Health Center. "
-        "High commercial + urban → Employer Wellness or Digital Health.",
+        "Recommended program type for each county, derived from its scoring profile. "
+        "Counties with high Medicare Advantage enrollment are best suited to payer partnership programs. "
+        "Counties with high social barriers and low access suit community health center partnerships. "
+        "Urban counties with high commercial coverage suit employer wellness or digital health programs.",
     "priority_county_list":
         "Ranked list of counties by composite Opportunity Score. "
         "Use this to build market access briefing packs, allocate field resources, "
-        "and prioritise payer contract negotiations. "
-        "Est. Pool = combined undiagnosed T2D + HTN + Hypothyroidism adults in that county.",
+        "and prioritize payer contract negotiations. "
+        "Estimated Pool shows the combined undiagnosed patient count across "
+        "Type 2 Diabetes, Hypertension, and Hypothyroidism in that county.",
     "opp_map":
-        "Choropleth map shading every US county by its composite Opportunity Score (0–100). "
-        "Darker navy = stronger opportunity. Hover a county for its score, tier, "
-        "estimated undiagnosed pool, and recommended program type.",
+        "Map shading every US county by its composite Opportunity Score from 0 to 100. "
+        "Darker navy means stronger opportunity. "
+        "Hover over a county to see its score, tier classification, "
+        "estimated undiagnosed patient pool, and recommended program type.",
     "top_states":
         "States ranked by average Opportunity Score across all their counties. "
-        "A high-scoring state signals a structurally favourable market — "
-        "high disease burden, wide diagnosis gap, and strong payer incentives — "
-        "making it a priority for state-level payer negotiations.",
+        "A high-scoring state signals a structurally favorable market — high disease burden, "
+        "a wide diagnosis gap, and strong payer incentives — making it a priority "
+        "for state-level payer negotiations.",
     "by_condition":
-        "Average geography risk score per condition across the current county selection. "
-        "A high HTN average with a lower T2D average, for example, suggests the market is "
-        "more favourable for hypertension screening programs than diabetes programs.",
+        "Average geography risk score by condition across the current county selection. "
+        "A high hypertension average with a lower diabetes average, for example, suggests "
+        "this market is more favorable for hypertension screening programs than diabetes programs.",
     "avg_ma_penetration":
-        "Average Medicare Advantage (MA) penetration rate across counties in the current view. "
-        "MA plans have Stars quality metric incentives to fund early screening and care management. "
-        "Counties above 40% MA penetration are strong candidates for payer partnership programs.",
+        "Average share of Medicare-eligible patients enrolled in a Medicare Advantage plan, "
+        "across counties in the current view. Medicare Advantage insurers have financial incentives "
+        "to fund early screening and care management. "
+        "Counties above 40% are strong candidates for payer partnership programs.",
     "avg_medicaid":
-        "Average Medicaid share of the population across counties in the current view. "
-        "High Medicaid rates indicate HEDIS measure incentives via Managed Care Organisations (MCOs). "
-        "These counties benefit from Community Health Center partnership programs tied to MCO contracts.",
+        "Average share of the population covered by Medicaid across counties in the current view. "
+        "High Medicaid share creates managed care contract incentives — "
+        "these counties benefit most from community health center partnerships "
+        "tied to Medicaid managed care contracts.",
     "avg_commercial":
-        "Average commercial (employer/individual) insurance share across counties in the current view. "
-        "High commercial coverage = employer wellness and digital health pathways. "
-        "These markets typically have higher patient engagement and broadband access.",
+        "Average share of the population with employer or individual commercial insurance, "
+        "across counties in the current view. High commercial coverage points to "
+        "employer wellness and digital health program pathways, where patient engagement "
+        "and technology access tend to be stronger.",
     "high_ma_counties":
-        "Number of counties with Medicare Advantage penetration ≥ 45%. "
-        "These represent the highest-priority markets for payer-funded screening partnerships, "
-        "as MA plans have strong Stars incentive to fund diabetes and hypertension detection programs.",
+        "Number of counties where more than 45% of Medicare-eligible patients are enrolled "
+        "in a Medicare Advantage plan. These are the highest-priority markets for payer-funded "
+        "screening partnerships, as insurers in these counties have the strongest financial "
+        "incentive to detect and manage chronic conditions early.",
     "counties_in_plan":
         "Number of counties included in the current investment plan after applying "
         "your state, tier, and condition filters. Adjust the sidebar filters to resize the plan.",
     "lead_program_type":
-        "The most frequently recommended program type across the counties in the current plan. "
-        "Driven by the distribution of MA penetration, SDoH burden, and commercial coverage "
-        "scores. Use this as the anchor for budget and partnership discussions.",
+        "The most frequently recommended program type across counties in the current plan. "
+        "Driven by the distribution of Medicare Advantage enrollment, social barriers, "
+        "and commercial coverage scores. Use this as the anchor for budget and partnership discussions.",
     "heatmap":
         "Each row is a county ranked by Opportunity Score. Each column is one of the 7 scoring "
-        "dimensions. Cell colour = relative rank within that column (navy = top quartile, "
-        "warm = bottom quartile). Use this to spot dimension-specific weaknesses in high-scoring "
-        "counties, or hidden strengths in counties ranked lower overall.",
+        "dimensions. Cell color shows relative strength within that dimension — "
+        "navy means top performers, warm orange means weaker performers. "
+        "Use this to spot dimension-specific weaknesses in high-scoring counties, "
+        "or hidden strengths in counties ranked lower overall.",
     "counties_mapped":
-        "Total counties visible on the map after applying the current state and condition filter. "
-        "The SPPF covers all 3,143 US counties and county-equivalents.",
+        "Total counties visible on the map after applying the current state and condition filters. "
+        "The tool covers all 3,143 US counties and county-equivalents.",
 }
 
 
