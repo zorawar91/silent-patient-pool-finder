@@ -244,14 +244,17 @@ METRIC_TOOLTIPS = {
 }
 
 
-def _iicon(tip: str, pos: str = "position:absolute;top:8px;right:10px;") -> str:
+def _iicon(tip: str, pos: str = "position:absolute;top:8px;right:10px;", tip_cls: str = "") -> str:
     """Return a classy circular info badge with a CSS hover tooltip.
     Default positioning: absolute top-right corner of the nearest relative container.
-    Pass pos='' to render inline (e.g. inside table headers).
+    Pass pos='' to render inline.
+    tip_cls='tip-r' → tooltip extends RIGHT (for leftmost column icons).
+    tip_cls='tip-l' → tooltip appears LEFT of icon at mid-height (for banner/inline icons).
     """
     safe = tip.replace('"', "&quot;").replace("'", "&#39;")
     style = f' style="{pos}"' if pos else ""
-    return f'<span class="info-tip" data-tip="{safe}"{style}>i</span>'
+    cls = f"info-tip {tip_cls}".strip() if tip_cls else "info-tip"
+    return f'<span class="{cls}" data-tip="{safe}"{style}>i</span>'
 
 
 def _stplot(fig, **kwargs):
@@ -437,6 +440,29 @@ st.markdown(f"""<style>
 /* ── Enable tooltip on hover ── */
 .info-tip:hover::after,
 .info-tip:hover::before {{ opacity:1; }}
+
+/* tip-r: tooltip extends RIGHT from icon (leftmost column — avoids sidebar overlap) */
+.info-tip.tip-r::after {{
+    left:0; right:auto; transform:none;
+}}
+.info-tip.tip-r::before {{
+    left:4px; right:auto;
+}}
+
+/* tip-l: tooltip appears LEFT of icon at mid-height (banner inline icons) */
+.info-tip.tip-l::after {{
+    top:50%; bottom:auto;
+    right:calc(100% + 12px); left:auto;
+    transform:translateY(-50%);
+}}
+.info-tip.tip-l::before {{
+    top:50%; bottom:auto;
+    right:calc(100% + 0px); left:auto;
+    transform:translateY(-50%);
+    border:6px solid transparent;
+    border-left-color:{DARK};
+    border-bottom-color:transparent;
+}}
 
 /* ── Sidebar: always visible, non-collapsible ── */
 [data-testid="stSidebar"] {{
@@ -738,7 +764,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
 
     st.markdown(f"""
     <div class="banner">
-      <div class="banner-title">Total Estimated Undiagnosed Patient Pool — United States {_iicon(METRIC_TOOLTIPS["est_pool"])}</div>
+      <div class="banner-title">Total Estimated Undiagnosed Patient Pool — United States {_iicon(METRIC_TOOLTIPS["est_pool"], tip_cls="tip-l")}</div>
       <div class="banner-stat">{total_pool/1_000_000:.1f}M</div>
       <div class="banner-note">
         Across Type 2 Diabetes, Hypertension &amp; Hyperthyroidism ·
@@ -749,7 +775,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
 
     # KPI strip
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.markdown(f'<div class="card-dark"><div class="label-w">Counties Scored{_iicon(METRIC_TOOLTIPS["counties_scored"])}</div><div class="big-num-w">{len(scores):,}</div><div class="sub-w">US county coverage</div></div>', unsafe_allow_html=True)
+    c1.markdown(f'<div class="card-dark"><div class="label-w">Counties Scored{_iicon(METRIC_TOOLTIPS["counties_scored"], tip_cls="tip-r")}</div><div class="big-num-w">{len(scores):,}</div><div class="sub-w">US county coverage</div></div>', unsafe_allow_html=True)
     c2.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority Markets{_iicon(METRIC_TOOLTIPS["priority_tier"])}</div><div class="big-num" style="color:{RED};">{priority_n}</div><div class="sub" style="color:{RED};">Opportunity Score ≥70</div></div>', unsafe_allow_html=True)
     c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Emerging Markets{_iicon(METRIC_TOOLTIPS["emerging_tier"])}</div><div class="big-num" style="color:{AMBER};">{emerging_n}</div><div class="sub" style="color:{AMBER};">Score 40–70</div></div>', unsafe_allow_html=True)
     avg_opp = scores[opp_col].mean()
@@ -1112,7 +1138,7 @@ def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
     lead_meta   = INTERV_META.get(str(lead_interv), {"color": G_MID, "icon": "•"})
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(f'<div class="card-dark"><div class="label-w">Counties in Plan</div>{_iicon(METRIC_TOOLTIPS["counties_in_plan"])}<div class="big-num-w">{len(top)}</div><div class="sub-w">filtered selection</div></div>', unsafe_allow_html=True)
+    c1.markdown(f'<div class="card-dark"><div class="label-w">Counties in Plan</div>{_iicon(METRIC_TOOLTIPS["counties_in_plan"], tip_cls="tip-r")}<div class="big-num-w">{len(top)}</div><div class="sub-w">filtered selection</div></div>', unsafe_allow_html=True)
     c2.markdown(f'<div class="card"><div class="label">Est. Undiagnosed Pool</div>{_iicon(METRIC_TOOLTIPS["est_pool"])}<div class="big-num">{total_pool:,}</div><div class="sub">within selected counties</div></div>', unsafe_allow_html=True)
     c3.markdown(f'<div class="card"><div class="label">Avg Opportunity Score</div>{_iicon(METRIC_TOOLTIPS["avg_opp_score"])}<div class="big-num">{top[opp_col].mean():.0f}</div><div class="sub-muted">out of 100</div></div>', unsafe_allow_html=True)
     c4.markdown(f'<div class="card" style="border-left:3px solid {lead_meta["color"]};"><div class="label">Lead Program Type</div>{_iicon(METRIC_TOOLTIPS["lead_program_type"])}<div style="font-size:1rem;font-weight:800;color:{DARK};margin:.2rem 0;">{lead_meta["icon"]} {lead_interv}</div><div class="sub-muted">most common</div></div>', unsafe_allow_html=True)
@@ -1276,7 +1302,7 @@ def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
     emerging_n = int(((filtered[opp_col] >= 40) & (filtered[opp_col] < 70)).sum())
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(f'<div class="card-dark"><div class="label-w">Counties Mapped</div>{_iicon(METRIC_TOOLTIPS["counties_mapped"])}<div class="big-num-w">{len(filtered):,}</div><div class="sub-w">{filtered["state_name"].nunique()} states</div></div>', unsafe_allow_html=True)
+    c1.markdown(f'<div class="card-dark"><div class="label-w">Counties Mapped</div>{_iicon(METRIC_TOOLTIPS["counties_mapped"], tip_cls="tip-r")}<div class="big-num-w">{len(filtered):,}</div><div class="sub-w">{filtered["state_name"].nunique()} states</div></div>', unsafe_allow_html=True)
     c2.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority ≥70</div>{_iicon(METRIC_TOOLTIPS["priority_tier"])}<div class="big-num" style="color:{RED};">{priority_n}</div><div class="sub" style="color:{RED};">Act now</div></div>', unsafe_allow_html=True)
     c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Emerging 40–70</div>{_iicon(METRIC_TOOLTIPS["emerging_tier"])}<div class="big-num" style="color:{AMBER};">{emerging_n}</div><div class="sub" style="color:{AMBER};">Plan &amp; monitor</div></div>', unsafe_allow_html=True)
     c4.markdown(f'<div class="card"><div class="label">Avg Score ({cond_label})</div>{_iicon(METRIC_TOOLTIPS["avg_opp_score"])}<div class="big-num">{filtered[score_col].mean():.0f}</div><div class="sub-muted">this view</div></div>', unsafe_allow_html=True)
@@ -1666,7 +1692,7 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
     </div>""", unsafe_allow_html=True)
 
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.markdown(f'<div class="card-dark"><div class="label-w">Total Counties</div>{_iicon(METRIC_TOOLTIPS["counties_scored"])}<div class="big-num-w">{len(state_df)}</div><div class="sub-w">{state}</div></div>', unsafe_allow_html=True)
+    c1.markdown(f'<div class="card-dark"><div class="label-w">Total Counties</div>{_iicon(METRIC_TOOLTIPS["counties_scored"], tip_cls="tip-r")}<div class="big-num-w">{len(state_df)}</div><div class="sub-w">{state}</div></div>', unsafe_allow_html=True)
     c2.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority ≥70</div>{_iicon(METRIC_TOOLTIPS["priority_tier"])}<div class="big-num" style="color:{RED};">{priority_n}</div><div class="sub" style="color:{RED};">Act now</div></div>', unsafe_allow_html=True)
     c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Emerging 40–70</div>{_iicon(METRIC_TOOLTIPS["emerging_tier"])}<div class="big-num" style="color:{AMBER};">{emerging_n}</div><div class="sub" style="color:{AMBER};">Plan &amp; monitor</div></div>', unsafe_allow_html=True)
     c4.markdown(f'<div class="card" style="border-top:3px solid {G_LIGHT};"><div class="label">Avg Opp. Score</div>{_iicon(METRIC_TOOLTIPS["avg_opp_score"])}<div class="big-num" style="color:{G_DARK};">{avg_score:.0f}</div><div class="sub-muted">out of 100</div></div>', unsafe_allow_html=True)
