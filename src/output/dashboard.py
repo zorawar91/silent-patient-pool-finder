@@ -764,7 +764,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
 
     st.markdown(f"""
     <div class="banner">
-      <div class="banner-title">Total Estimated Undiagnosed Patient Pool — United States {_iicon(METRIC_TOOLTIPS["est_pool"], tip_cls="tip-l")}</div>
+      <div class="banner-title">Total Estimated Undiagnosed Patient Pool — United States</div>
       <div class="banner-stat">{total_pool/1_000_000:.1f}M</div>
       <div class="banner-note">
         Across Type 2 Diabetes, Hypertension &amp; Hyperthyroidism ·
