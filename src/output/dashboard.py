@@ -378,6 +378,16 @@ st.markdown(f"""<style>
 
 #MainMenu, footer, header {{ visibility:hidden; }}
 
+/* ── Allow tooltips to escape Streamlit column/block clip zones ── */
+[data-testid="stColumn"],
+[data-testid="stVerticalBlock"],
+[data-testid="stHorizontalBlock"],
+[data-testid="stVerticalBlockBorderWrapper"],
+[data-testid="stMarkdownContainer"],
+[data-testid="stElementContainer"] {{
+    overflow: visible !important;
+}}
+
 /* ── Info icon with CSS tooltip ──────────────────────────── */
 .info-tip {{
     display:inline-flex; align-items:center; justify-content:center;
@@ -389,41 +399,45 @@ st.markdown(f"""<style>
     box-shadow:0 1px 5px rgba(0,119,200,.35);
     transition:transform .15s,box-shadow .15s;
     line-height:1; user-select:none;
+    z-index:9999;
 }}
 .info-tip:hover {{
     transform:scale(1.2);
     box-shadow:0 3px 10px rgba(0,119,200,.55);
+    z-index:99999;
 }}
+/* Tooltip bubble — appears BELOW-LEFT of icon so it never hides behind right-edge cards */
 .info-tip::after {{
     content:attr(data-tip);
     position:absolute;
-    top:50%; transform:translateY(-50%);
-    right:calc(100% + 12px); left:auto;
+    top:calc(100% + 8px);
+    right:0; left:auto;
     background:{DARK};
     color:#fff;
     padding:10px 14px;
     border-radius:10px;
     font-size:.72rem; font-weight:400; font-style:normal;
-    line-height:1.55; width:260px; white-space:normal;
+    line-height:1.55; width:240px; white-space:normal;
     z-index:99999; opacity:0; pointer-events:none;
     transition:opacity .18s ease;
-    box-shadow:0 8px 28px rgba(0,0,0,.28);
-    border:1px solid rgba(255,255,255,.08);
+    box-shadow:0 8px 28px rgba(0,0,0,.35);
+    border:1px solid rgba(255,255,255,.10);
     letter-spacing:.01em; text-align:left;
 }}
+/* Small caret above the bubble */
 .info-tip::before {{
     content:'';
     position:absolute;
-    top:50%; transform:translateY(-50%);
-    right:calc(100% + 0px); left:auto;
+    top:calc(100% + 2px);
+    right:4px; left:auto;
     border:6px solid transparent;
-    border-left-color:{DARK};
+    border-bottom-color:{DARK};
     z-index:99999; opacity:0; pointer-events:none;
     transition:opacity .18s ease;
 }}
-/* CSS pseudo-element tooltips disabled — handled by JS fixed-position tooltip */
+/* ── Enable tooltip on hover ── */
 .info-tip:hover::after,
-.info-tip:hover::before {{ opacity:0 !important; }}
+.info-tip:hover::before {{ opacity:1; }}
 
 /* ── Sidebar: always visible, non-collapsible ── */
 [data-testid="stSidebar"] {{
@@ -1844,38 +1858,31 @@ def main():
     elif view == "Payer Landscape":
         view_payer_landscape(scores, state, top_n)
 
-    # ── Fixed-position JS tooltip (escapes all Streamlit overflow/clip contexts) ──
+    # ── JS tooltip: belt-and-suspenders on top of CSS hover ──
+    # The CSS ::after tooltip is the primary mechanism.
+    # This JS creates a position:fixed div at body level as a secondary fallback
+    # for any icons inside elements where overflow:visible cannot be set.
     components.html("""
 <script>
 (function() {
-  var doc = window.parent.document;
+  var doc;
+  try { doc = window.parent.document; } catch(e) { return; }  // cross-origin: CSS tooltip handles it
+  if (!doc) return;
 
-  // Create singleton tooltip div at body level (position:fixed escapes all clipping)
   var tt = doc.getElementById('sppf-tt');
   if (!tt) {
     tt = doc.createElement('div');
     tt.id = 'sppf-tt';
     Object.assign(tt.style, {
-      position:       'fixed',
-      background:     '#0A1F3C',
-      color:          '#fff',
-      padding:        '10px 14px',
-      borderRadius:   '10px',
-      fontSize:       '0.72rem',
-      fontFamily:     'sans-serif',
-      fontWeight:     '400',
-      lineHeight:     '1.55',
-      letterSpacing:  '0.01em',
-      textAlign:      'left',
-      width:          '260px',
-      maxWidth:       '80vw',
-      whiteSpace:     'normal',
-      boxShadow:      '0 8px 28px rgba(0,0,0,0.32)',
-      border:         '1px solid rgba(255,255,255,0.10)',
-      zIndex:         '2147483647',
-      opacity:        '0',
-      pointerEvents:  'none',
-      transition:     'opacity 0.18s ease',
+      position:'fixed', background:'#0A1F3C', color:'#fff',
+      padding:'10px 14px', borderRadius:'10px', fontSize:'0.72rem',
+      fontFamily:'sans-serif', fontWeight:'400', lineHeight:'1.55',
+      letterSpacing:'0.01em', textAlign:'left', width:'240px',
+      maxWidth:'80vw', whiteSpace:'normal',
+      boxShadow:'0 8px 28px rgba(0,0,0,0.35)',
+      border:'1px solid rgba(255,255,255,0.10)',
+      zIndex:'2147483647', opacity:'0', pointerEvents:'none',
+      transition:'opacity 0.18s ease',
     });
     doc.body.appendChild(tt);
   }
@@ -1886,33 +1893,19 @@ def main():
     tt.textContent = tip;
     tt.style.opacity = '0';
     tt.style.display = 'block';
-
     var r = icon.getBoundingClientRect();
-    var vw = window.parent.innerWidth;
-    var vh = window.parent.innerHeight;
-    var ttW = 260;
-
-    // Try to place to the LEFT of icon; fall back to right if no room
-    var left = r.left - ttW - 12;
-    if (left < 8) left = r.right + 12;
-    // Clamp right edge
+    var vw = window.parent.innerWidth, vh = window.parent.innerHeight;
+    var ttW = 240;
+    // Below the icon, right-aligned with it; clamp to viewport
+    var left = r.right - ttW;
+    if (left < 8) left = 8;
     if (left + ttW > vw - 8) left = vw - ttW - 8;
-
-    // Vertically centre on icon; then clamp within viewport
-    var top = r.top + r.height / 2;
+    var top = r.bottom + 8;
+    if (top + 120 > vh - 8) top = r.top - 8 - 120;  // flip above if near bottom
     tt.style.left = left + 'px';
-    tt.style.top  = top + 'px';
-    tt.style.transform = 'translateY(-50%)';
-
-    // After layout, nudge if bottom clips
-    requestAnimationFrame(function() {
-      var ttH = tt.offsetHeight;
-      var bot = top - ttH/2 + ttH;
-      if (bot > vh - 8) top = vh - 8 - ttH/2;
-      if (top - ttH/2 < 8) top = 8 + ttH/2;
-      tt.style.top = top + 'px';
-      tt.style.opacity = '1';
-    });
+    tt.style.top = top + 'px';
+    tt.style.transform = 'none';
+    requestAnimationFrame(function() { tt.style.opacity = '1'; });
   }
 
   function hideTip() { tt.style.opacity = '0'; }
@@ -1921,15 +1914,13 @@ def main():
     doc.querySelectorAll('.info-tip:not([data-tt])').forEach(function(icon) {
       icon.setAttribute('data-tt', '1');
       icon.addEventListener('mouseenter', function() { showTip(icon); });
-      icon.addEventListener('mouseleave',  hideTip);
-      icon.addEventListener('click',       hideTip);
+      icon.addEventListener('mouseleave', hideTip);
+      icon.addEventListener('click', hideTip);
     });
   }
 
   attach();
-  // Re-attach after Streamlit re-renders (it re-mounts DOM nodes)
-  var obs = new MutationObserver(attach);
-  obs.observe(doc.body, { childList: true, subtree: true });
+  new MutationObserver(attach).observe(doc.body, { childList:true, subtree:true });
 })();
 </script>
 """, height=0)
