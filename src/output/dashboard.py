@@ -10,7 +10,6 @@ import os
 import json
 import urllib.request
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import plotly.express as px
@@ -1870,72 +1869,7 @@ def main():
     elif view == "Payer Landscape":
         view_payer_landscape(scores, state, top_n)
 
-    # ── JS tooltip: belt-and-suspenders on top of CSS hover ──
-    # The CSS ::after tooltip is the primary mechanism.
-    # This JS creates a position:fixed div at body level as a secondary fallback
-    # for any icons inside elements where overflow:visible cannot be set.
-    components.html("""
-<script>
-(function() {
-  var doc;
-  try { doc = window.parent.document; } catch(e) { return; }  // cross-origin: CSS tooltip handles it
-  if (!doc) return;
-
-  var tt = doc.getElementById('sppf-tt');
-  if (!tt) {
-    tt = doc.createElement('div');
-    tt.id = 'sppf-tt';
-    Object.assign(tt.style, {
-      position:'fixed', background:'#0A1F3C', color:'#fff',
-      padding:'10px 14px', borderRadius:'10px', fontSize:'0.72rem',
-      fontFamily:'sans-serif', fontWeight:'400', lineHeight:'1.55',
-      letterSpacing:'0.01em', textAlign:'left', width:'240px',
-      maxWidth:'80vw', whiteSpace:'normal',
-      boxShadow:'0 8px 28px rgba(0,0,0,0.35)',
-      border:'1px solid rgba(255,255,255,0.10)',
-      zIndex:'2147483647', opacity:'0', pointerEvents:'none',
-      transition:'opacity 0.18s ease',
-    });
-    doc.body.appendChild(tt);
-  }
-
-  function showTip(icon) {
-    var tip = icon.getAttribute('data-tip');
-    if (!tip) return;
-    tt.textContent = tip;
-    tt.style.opacity = '0';
-    tt.style.display = 'block';
-    var r = icon.getBoundingClientRect();
-    var vw = window.parent.innerWidth, vh = window.parent.innerHeight;
-    var ttW = 240;
-    // Below the icon, right-aligned with it; clamp to viewport
-    var left = r.right - ttW;
-    if (left < 8) left = 8;
-    if (left + ttW > vw - 8) left = vw - ttW - 8;
-    var top = r.bottom + 8;
-    if (top + 120 > vh - 8) top = r.top - 8 - 120;  // flip above if near bottom
-    tt.style.left = left + 'px';
-    tt.style.top = top + 'px';
-    tt.style.transform = 'none';
-    requestAnimationFrame(function() { tt.style.opacity = '1'; });
-  }
-
-  function hideTip() { tt.style.opacity = '0'; }
-
-  function attach() {
-    doc.querySelectorAll('.info-tip:not([data-tt])').forEach(function(icon) {
-      icon.setAttribute('data-tt', '1');
-      icon.addEventListener('mouseenter', function() { showTip(icon); });
-      icon.addEventListener('mouseleave', hideTip);
-      icon.addEventListener('click', hideTip);
-    });
-  }
-
-  attach();
-  new MutationObserver(attach).observe(doc.body, { childList:true, subtree:true });
-})();
-</script>
-""", height=0)
+    pass  # tooltip handled entirely by CSS ::after (overflow:visible on Streamlit containers)
 
 
 if __name__ == "__main__":
