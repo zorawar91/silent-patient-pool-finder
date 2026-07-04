@@ -801,16 +801,27 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
         st.markdown(f'<div class="ch"><div class="sec-head">Opportunity Score Distribution{_iicon(METRIC_TOOLTIPS["opp_score_dist"])}</div>'
                     f'<div class="sec-sub">How the 3,000+ US counties distribute across the 0–100 opportunity scale</div></div>',
                     unsafe_allow_html=True)
+        # Manual binning so we can colour each bar by tier
+        _vals = scores[opp_col].dropna().values
+        _bins = np.arange(0, 101, 2.5)          # 40 bins of width 2.5
+        _counts, _edges = np.histogram(_vals, bins=_bins)
+        _mids   = (_edges[:-1] + _edges[1:]) / 2
+        _colors = []
+        for m in _mids:
+            if m >= 70:   _colors.append(RED)
+            elif m >= 40: _colors.append(AMBER)
+            else:         _colors.append(G_LIGHT)
+        _labels = [
+            f"{'Priority' if m>=70 else 'Emerging' if m>=40 else 'Developing'} · {m:.0f}: {c} counties"
+            for m, c in zip(_mids, _counts)
+        ]
         fig = go.Figure()
-        fig.add_trace(go.Histogram(
-            x=scores[opp_col],
-            nbinsx=40,
-            marker=dict(
-                color=scores[opp_col],
-                colorscale=[[0, G_PALE], [0.4, G_LIGHT], [0.7, G_MID], [1, G_DARK]],
-                showscale=False,
-            ),
-            hovertemplate="Score %{x:.0f}: %{y} counties<extra></extra>",
+        fig.add_trace(go.Bar(
+            x=_mids, y=_counts,
+            width=2.3,
+            marker=dict(color=_colors, opacity=0.85, line=dict(width=0)),
+            customdata=_labels,
+            hovertemplate="%{customdata}<extra></extra>",
         ))
         fig.add_vline(x=40, line=dict(dash="dot", color=AMBER, width=1.5),
                       annotation_text="Emerging", annotation_position="top right",
@@ -822,6 +833,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
             xaxis=dict(title="Opportunity Score", range=[0, 100]),
             yaxis=dict(title="Number of Counties"),
             plot_bgcolor="white", paper_bgcolor="white",
+            bargap=0.05,
             margin=dict(l=0, r=0, t=20, b=30), height=260,
         )
         _stplot(fig, use_container_width=True)
