@@ -227,6 +227,21 @@ METRIC_TOOLTIPS = {
         "Number of counties with Medicare Advantage penetration ≥ 45%. "
         "These represent the highest-priority markets for payer-funded screening partnerships, "
         "as MA plans have strong Stars incentive to fund diabetes and hypertension detection programs.",
+    "counties_in_plan":
+        "Number of counties included in the current investment plan after applying "
+        "your state, tier, and condition filters. Adjust the sidebar filters to resize the plan.",
+    "lead_program_type":
+        "The most frequently recommended program type across the counties in the current plan. "
+        "Driven by the distribution of MA penetration, SDoH burden, and commercial coverage "
+        "scores. Use this as the anchor for budget and partnership discussions.",
+    "heatmap":
+        "Each row is a county ranked by Opportunity Score. Each column is one of the 7 scoring "
+        "dimensions. Cell colour = relative rank within that column (navy = top quartile, "
+        "warm = bottom quartile). Use this to spot dimension-specific weaknesses in high-scoring "
+        "counties, or hidden strengths in counties ranked lower overall.",
+    "counties_mapped":
+        "Total counties visible on the map after applying the current state and condition filter. "
+        "The SPPF covers all 3,143 US counties and county-equivalents.",
 }
 
 
@@ -963,7 +978,7 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
 
     # County-level dimension heatmap
     st.markdown(
-        f'<div class="ch"><div class="sec-head">Top {len(top)} Counties — Dimension Heatmap</div>'
+        f'<div class="ch"><div class="sec-head">Top {len(top)} Counties — Dimension Heatmap{_iicon(METRIC_TOOLTIPS["heatmap"])}</div>'
         f'<div class="sec-sub">Each row = a county · Each column = one of the 7 dimensions · Darker = stronger signal</div></div>',
         unsafe_allow_html=True)
 
@@ -1072,10 +1087,10 @@ def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
     lead_meta   = INTERV_META.get(str(lead_interv), {"color": G_MID, "icon": "•"})
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(f'<div class="card-dark"><div class="label-w">Counties in Plan</div><div class="big-num-w">{len(top)}</div><div class="sub-w">filtered selection</div></div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="card"><div class="label">Est. Undiagnosed Pool</div><div class="big-num">{total_pool:,}</div><div class="sub">within selected counties</div></div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="card"><div class="label">Avg Opportunity Score</div><div class="big-num">{top[opp_col].mean():.0f}</div><div class="sub-muted">out of 100</div></div>', unsafe_allow_html=True)
-    c4.markdown(f'<div class="card" style="border-left:3px solid {lead_meta["color"]};"><div class="label">Lead Program Type</div><div style="font-size:1rem;font-weight:800;color:{DARK};margin:.2rem 0;">{lead_meta["icon"]} {lead_interv}</div><div class="sub-muted">most common</div></div>', unsafe_allow_html=True)
+    c1.markdown(f'<div class="card-dark"><div class="label-w">Counties in Plan</div>{_iicon(METRIC_TOOLTIPS["counties_in_plan"])}<div class="big-num-w">{len(top)}</div><div class="sub-w">filtered selection</div></div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="card"><div class="label">Est. Undiagnosed Pool</div>{_iicon(METRIC_TOOLTIPS["est_pool"])}<div class="big-num">{total_pool:,}</div><div class="sub">within selected counties</div></div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="card"><div class="label">Avg Opportunity Score</div>{_iicon(METRIC_TOOLTIPS["avg_opp_score"])}<div class="big-num">{top[opp_col].mean():.0f}</div><div class="sub-muted">out of 100</div></div>', unsafe_allow_html=True)
+    c4.markdown(f'<div class="card" style="border-left:3px solid {lead_meta["color"]};"><div class="label">Lead Program Type</div>{_iicon(METRIC_TOOLTIPS["lead_program_type"])}<div style="font-size:1rem;font-weight:800;color:{DARK};margin:.2rem 0;">{lead_meta["icon"]} {lead_interv}</div><div class="sub-muted">most common</div></div>', unsafe_allow_html=True)
 
     st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
 
@@ -1236,10 +1251,10 @@ def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
     emerging_n = int(((filtered[opp_col] >= 40) & (filtered[opp_col] < 70)).sum())
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(f'<div class="card-dark"><div class="label-w">Counties Mapped</div><div class="big-num-w">{len(filtered):,}</div><div class="sub-w">{filtered["state_name"].nunique()} states</div></div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority ≥70</div><div class="big-num" style="color:{RED};">{priority_n}</div><div class="sub" style="color:{RED};">Act now</div></div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Emerging 40–70</div><div class="big-num" style="color:{AMBER};">{emerging_n}</div><div class="sub" style="color:{AMBER};">Plan &amp; monitor</div></div>', unsafe_allow_html=True)
-    c4.markdown(f'<div class="card"><div class="label">Avg Score ({cond_label})</div><div class="big-num">{filtered[score_col].mean():.0f}</div><div class="sub-muted">this view</div></div>', unsafe_allow_html=True)
+    c1.markdown(f'<div class="card-dark"><div class="label-w">Counties Mapped</div>{_iicon(METRIC_TOOLTIPS["counties_mapped"])}<div class="big-num-w">{len(filtered):,}</div><div class="sub-w">{filtered["state_name"].nunique()} states</div></div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority ≥70</div>{_iicon(METRIC_TOOLTIPS["priority_tier"])}<div class="big-num" style="color:{RED};">{priority_n}</div><div class="sub" style="color:{RED};">Act now</div></div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Emerging 40–70</div>{_iicon(METRIC_TOOLTIPS["emerging_tier"])}<div class="big-num" style="color:{AMBER};">{emerging_n}</div><div class="sub" style="color:{AMBER};">Plan &amp; monitor</div></div>', unsafe_allow_html=True)
+    c4.markdown(f'<div class="card"><div class="label">Avg Score ({cond_label})</div>{_iicon(METRIC_TOOLTIPS["avg_opp_score"])}<div class="big-num">{filtered[score_col].mean():.0f}</div><div class="sub-muted">this view</div></div>', unsafe_allow_html=True)
 
     st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
 
@@ -1626,10 +1641,10 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
     </div>""", unsafe_allow_html=True)
 
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.markdown(f'<div class="card-dark"><div class="label-w">Total Counties</div><div class="big-num-w">{len(state_df)}</div><div class="sub-w">{state}</div></div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority ≥70</div><div class="big-num" style="color:{RED};">{priority_n}</div><div class="sub" style="color:{RED};">Act now</div></div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Emerging 40–70</div><div class="big-num" style="color:{AMBER};">{emerging_n}</div><div class="sub" style="color:{AMBER};">Plan &amp; monitor</div></div>', unsafe_allow_html=True)
-    c4.markdown(f'<div class="card" style="border-top:3px solid {G_LIGHT};"><div class="label">Avg Opp. Score</div><div class="big-num" style="color:{G_DARK};">{avg_score:.0f}</div><div class="sub-muted">out of 100</div></div>', unsafe_allow_html=True)
+    c1.markdown(f'<div class="card-dark"><div class="label-w">Total Counties</div>{_iicon(METRIC_TOOLTIPS["counties_scored"])}<div class="big-num-w">{len(state_df)}</div><div class="sub-w">{state}</div></div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority ≥70</div>{_iicon(METRIC_TOOLTIPS["priority_tier"])}<div class="big-num" style="color:{RED};">{priority_n}</div><div class="sub" style="color:{RED};">Act now</div></div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Emerging 40–70</div>{_iicon(METRIC_TOOLTIPS["emerging_tier"])}<div class="big-num" style="color:{AMBER};">{emerging_n}</div><div class="sub" style="color:{AMBER};">Plan &amp; monitor</div></div>', unsafe_allow_html=True)
+    c4.markdown(f'<div class="card" style="border-top:3px solid {G_LIGHT};"><div class="label">Avg Opp. Score</div>{_iicon(METRIC_TOOLTIPS["avg_opp_score"])}<div class="big-num" style="color:{G_DARK};">{avg_score:.0f}</div><div class="sub-muted">out of 100</div></div>', unsafe_allow_html=True)
     c5.markdown(f'<div class="card"><div class="label">Est. Pool</div><div style="font-size:1.2rem;font-weight:800;color:{DARK};">{total_pool:,}</div><div class="sub-muted">undiagnosed</div></div>', unsafe_allow_html=True)
 
     st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
