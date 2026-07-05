@@ -637,13 +637,33 @@ def _download_county_health_rankings() -> pd.DataFrame:
         log.info(f"  CHR: {len(df):,} counties from cache")
         return df
 
-    # CHR blocks direct downloads without a Referer header (returns 403)
-    _chr_headers = {
-        "User-Agent": "SPPF/1.0 (research; contact zorawarnandwal@gmail.com)",
-        "Referer": "https://www.countyhealthrankings.org/health-data/methodology-and-sources/data-documentation",
-        "Accept": "text/csv,*/*",
+    # CHR uses Drupal-based bot protection: needs a real browser session with cookies.
+    # Strategy: visit the download page first to collect session cookies, then fetch the CSV.
+    _session = requests.Session()
+    _session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
         "Accept-Encoding": "identity",
-    }
+        "DNT": "1",
+    })
+    try:
+        log.info("  CHR: seeding cookies from download page ...")
+        seed = _session.get(
+            "https://www.countyhealthrankings.org/health-data/methodology-and-sources/data-documentation",
+            timeout=20,
+        )
+        log.info(f"  CHR: seed status {seed.status_code}, cookies: {dict(_session.cookies)}")
+    except Exception as e:
+        log.warning(f"  CHR: cookie seed failed ({e}), trying without cookies")
+
+    _session.headers.update({
+        "Accept": "text/csv,application/octet-stream,*/*",
+        "Referer": "https://www.countyhealthrankings.org/health-data/methodology-and-sources/data-documentation",
+    })
+
     urls = [
         # 2025 release (v3 — latest available)
         "https://www.countyhealthrankings.org/sites/default/files/media/document/analytic_data2025_v3.csv",
@@ -654,7 +674,8 @@ def _download_county_health_rankings() -> pd.DataFrame:
     for url in urls:
         try:
             log.info(f"  CHR: downloading {url}")
-            resp = requests.get(url, timeout=TIMEOUT, headers=_chr_headers)
+            resp = _session.get(url, timeout=TIMEOUT)
+            log.info(f"  CHR: HTTP {resp.status_code}, size {len(resp.content):,} bytes")
             resp.raise_for_status()
             if len(resp.content) < 100_000:
                 log.warning(f"  CHR: file too small ({len(resp.content):,} bytes), skipping")
