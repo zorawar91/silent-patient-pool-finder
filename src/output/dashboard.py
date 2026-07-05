@@ -552,25 +552,34 @@ def _get_neon_engine():
 
 @st.cache_data
 def load_data():
-    engine = _get_neon_engine()
-    if engine:
-        scores      = pd.read_sql("SELECT * FROM scores ORDER BY overall_risk_score DESC", engine)
-        scores_long = pd.read_sql("SELECT * FROM scores_long", engine)
-        return scores, scores_long
-
-    # Prefer the real-data dimension scores (3,144 counties, 5 real sources)
+    # Always prefer local dimension_scores.parquet — most complete and up-to-date
+    # (3,144 counties, 5 real data sources). Neon and legacy paths are fallbacks only.
     dim_path = Path("data/scored/dimension_scores.parquet")
     if dim_path.exists():
         scores      = pd.read_parquet(dim_path)
         scores_long = pd.DataFrame()   # not needed — all signals are columns in scores
         return scores, scores_long
 
+    # Neon fallback (cloud sync)
+    engine = _get_neon_engine()
+    if engine:
+        try:
+            scores      = pd.read_sql("SELECT * FROM dimension_scores ORDER BY opportunity_score DESC", engine)
+            scores_long = pd.DataFrame()
+            return scores, scores_long
+        except Exception:
+            try:
+                scores      = pd.read_sql("SELECT * FROM scores ORDER BY overall_risk_score DESC", engine)
+                scores_long = pd.read_sql("SELECT * FROM scores_long", engine)
+                return scores, scores_long
+            except Exception:
+                pass
+
     # Legacy ML pipeline fallback (259-county synthetic output)
     legacy_path = Path("data/scored/scores.parquet")
     if not legacy_path.exists():
         st.error(
-            "No data found. Run `python3 ingest_real_data.py` to generate county scores, "
-            "or `python3 run.py` for the legacy ML pipeline."
+            "No data found. Run `python3 ingest_real_data.py` to generate county scores."
         )
         st.stop()
     scores      = pd.read_parquet(legacy_path)
