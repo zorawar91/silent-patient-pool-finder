@@ -628,8 +628,16 @@ def _download_cms_ma_penetration_report() -> pd.DataFrame:
 def _download_county_health_rankings() -> pd.DataFrame:
     """
     County Health Rankings & Roadmaps (Robert Wood Johnson Foundation).
-    Downloads analytic_data2024.csv — covers all 3,143 US counties.
-    Provides: access to care proxies, SDoH backup signals.
+    Covers all 3,143 US counties. Provides: access to care proxies, SDoH backup signals.
+
+    NOTE: CHR blocks automated downloads via WAF/TLS fingerprinting.
+    Manual download instructions (one-time setup):
+      1. Open in your browser:
+         https://www.countyhealthrankings.org/health-data/county-health-rankings-reports
+      2. Click "Download" next to the most recent year → "CSV Data"
+         (or direct link: https://www.countyhealthrankings.org/sites/default/files/media/document/analytic_data2025_v3.csv)
+      3. Save the file to:  data/open/analytic_data_chr.csv
+      The pipeline will pick it up automatically on next run.
     """
     cache = Path(OPEN_DIR) / "county_health_rankings.parquet"
     if cache.exists():
@@ -637,35 +645,39 @@ def _download_county_health_rankings() -> pd.DataFrame:
         log.info(f"  CHR: {len(df):,} counties from cache")
         return df
 
-    # CHR uses Drupal-based bot protection: needs a real browser session with cookies.
-    # Strategy: visit the download page first to collect session cookies, then fetch the CSV.
+    # Check for manually downloaded CSV first
+    manual_paths = [
+        Path(OPEN_DIR) / "analytic_data_chr.csv",
+        Path(OPEN_DIR) / "analytic_data2025_v3.csv",
+        Path(OPEN_DIR) / "analytic_data2024.csv",
+        Path(OPEN_DIR) / "analytic_data2023.csv",
+    ]
+    for local in manual_paths:
+        if local.exists():
+            log.info(f"  CHR: loading manually downloaded file: {local.name}")
+            try:
+                raw = pd.read_csv(local, low_memory=False, skiprows=1)
+                result = _parse_chr(raw)
+                if not result.empty and len(result) > 1000:
+                    result.to_parquet(cache, index=False)
+                    log.info(f"  CHR: {len(result):,} counties loaded + cached")
+                    return result
+            except Exception as e:
+                log.warning(f"  CHR: local file parse failed: {e}")
+
+    # Automated download — often blocked by CHR's WAF; kept as best-effort
     _session = requests.Session()
     _session.headers.update({
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                       "AppleWebKit/537.36 (KHTML, like Gecko) "
                       "Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept": "text/csv,application/octet-stream,*/*",
         "Accept-Language": "en-US,en;q=0.9",
         "Accept-Encoding": "identity",
-        "DNT": "1",
-    })
-    try:
-        log.info("  CHR: seeding cookies from download page ...")
-        seed = _session.get(
-            "https://www.countyhealthrankings.org/health-data/methodology-and-sources/data-documentation",
-            timeout=20,
-        )
-        log.info(f"  CHR: seed status {seed.status_code}, cookies: {dict(_session.cookies)}")
-    except Exception as e:
-        log.warning(f"  CHR: cookie seed failed ({e}), trying without cookies")
-
-    _session.headers.update({
-        "Accept": "text/csv,application/octet-stream,*/*",
-        "Referer": "https://www.countyhealthrankings.org/health-data/methodology-and-sources/data-documentation",
+        "Referer": "https://www.countyhealthrankings.org/health-data/county-health-rankings-reports",
     })
 
     urls = [
-        # 2025 release (v3 — latest available)
         "https://www.countyhealthrankings.org/sites/default/files/media/document/analytic_data2025_v3.csv",
         "https://www.countyhealthrankings.org/sites/default/files/media/document/analytic_data2024.csv",
         "https://www.countyhealthrankings.org/sites/default/files/media/document/analytic_data2023.csv",
@@ -673,12 +685,17 @@ def _download_county_health_rankings() -> pd.DataFrame:
 
     for url in urls:
         try:
-            log.info(f"  CHR: downloading {url}")
+            log.info(f"  CHR: trying {url}")
             resp = _session.get(url, timeout=TIMEOUT)
-            log.info(f"  CHR: HTTP {resp.status_code}, size {len(resp.content):,} bytes")
+            if resp.status_code == 403:
+                # WAF block — skip remaining URLs, they will all 403
+                log.warning(
+                    "  CHR: WAF blocked automated download (403). "
+                    f"Download manually → save to data/open/analytic_data_chr.csv"
+                )
+                break
             resp.raise_for_status()
             if len(resp.content) < 100_000:
-                log.warning(f"  CHR: file too small ({len(resp.content):,} bytes), skipping")
                 continue
             raw = pd.read_csv(io.StringIO(resp.text), low_memory=False, skiprows=1)
             result = _parse_chr(raw)
@@ -689,7 +706,10 @@ def _download_county_health_rankings() -> pd.DataFrame:
         except Exception as e:
             log.warning(f"  CHR URL failed: {e}")
 
-    log.warning("  County Health Rankings: all URLs failed — access/SDoH backup unavailable")
+    log.warning(
+        "  County Health Rankings unavailable — "
+        "save CSV to data/open/analytic_data_chr.csv and re-run to activate."
+    )
     return pd.DataFrame()
 
 
