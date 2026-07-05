@@ -130,8 +130,9 @@ METRIC_TOOLTIPS = {
         "A higher score means a stronger case for program investment in that county.",
     "priority_tier":
         "Opportunity Score of 55 or above. These counties have the highest disease burden, "
-        "widest diagnosis gap, and strongest payer funding incentives — confirmed by multiple "
-        "real data sources (CDC PLACES + Census ACS). "
+        "widest diagnosis gap, and strongest payer funding incentives — confirmed by five "
+        "real data sources: CDC PLACES, US Census ACS, CMS Medicare data, HRSA shortage "
+        "area designations, and County Health Rankings. "
         "Prioritize for immediate program launch and budget allocation.",
     "emerging_tier":
         "Opportunity Score between 40 and 55. Strong underlying indicators with some gaps — "
@@ -337,7 +338,7 @@ INTERV_META = {
 COND_META = {
     "t2d":             {"label": "Type 2 Diabetes",  "color": "#E76F51", "national_pool": 8_700_000},
     "htn":             {"label": "Hypertension",     "color": "#3B82F6", "national_pool": 34_900_000},
-    "hyperthyroidism": {"label": "Hyperthyroidism",  "color": "#2A9D8F", "national_pool": 2_100_000},
+    "hyperthyroidism": {"label": "Hypothyroidism",   "color": "#2A9D8F", "national_pool": 2_100_000},
 }
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
@@ -556,10 +557,23 @@ def load_data():
         scores      = pd.read_sql("SELECT * FROM scores ORDER BY overall_risk_score DESC", engine)
         scores_long = pd.read_sql("SELECT * FROM scores_long", engine)
         return scores, scores_long
-    if not Path("data/scored/scores.parquet").exists():
-        st.error("No data found. Run `python3 run.py` first (add `--db` to also push to Neon).")
+
+    # Prefer the real-data dimension scores (3,144 counties, 5 real sources)
+    dim_path = Path("data/scored/dimension_scores.parquet")
+    if dim_path.exists():
+        scores      = pd.read_parquet(dim_path)
+        scores_long = pd.DataFrame()   # not needed — all signals are columns in scores
+        return scores, scores_long
+
+    # Legacy ML pipeline fallback (259-county synthetic output)
+    legacy_path = Path("data/scored/scores.parquet")
+    if not legacy_path.exists():
+        st.error(
+            "No data found. Run `python3 ingest_real_data.py` to generate county scores, "
+            "or `python3 run.py` for the legacy ML pipeline."
+        )
         st.stop()
-    scores      = pd.read_parquet("data/scored/scores.parquet")
+    scores      = pd.read_parquet(legacy_path)
     scores_long = pd.read_parquet("data/scored/scores_long.parquet")
     return scores, scores_long
 
@@ -734,7 +748,7 @@ def render_sidebar(scores: pd.DataFrame):
         </div>""", unsafe_allow_html=True)
 
         cond_opts = {"All Conditions": "overall", "🩸 Type 2 Diabetes": "t2d",
-                     "❤️ Hypertension": "htn", "🦋 Hyperthyroidism": "hyperthyroidism"}
+                     "❤️ Hypertension": "htn", "🦋 Hypothyroidism": "hyperthyroidism"}
         cond_label = st.selectbox("Condition", list(cond_opts.keys()),
                                   label_visibility="collapsed")
         condition  = cond_opts[cond_label]
@@ -797,7 +811,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
       <div class="banner-title">Total Estimated Undiagnosed Patient Pool — United States</div>
       <div class="banner-stat">{total_pool/1_000_000:.1f}M</div>
       <div class="banner-note">
-        Across Type 2 Diabetes, Hypertension &amp; Hyperthyroidism ·
+        Across Type 2 Diabetes, Hypertension &amp; Hypothyroidism ·
         Scored via 7-Dimension framework ·
         {priority_n:,} Priority + {emerging_n:,} Emerging counties identified
       </div>

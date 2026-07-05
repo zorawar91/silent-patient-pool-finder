@@ -1,34 +1,58 @@
 # Silent Patient Pool Finder
 
-A multi-signal inference engine that identifies geographies and HCP clusters with high undiagnosed chronic-disease burden — using pharmacy purchase patterns, lab test ordering behaviour, and geographic socioeconomic signals as proxy indicators.
+A county-level market intelligence platform that identifies where undiagnosed chronic disease burden is highest across the United States — scored via a 7-dimension framework using real public health data.
 
-> ⚠️ **This is a population-level signal and planning tool — not a clinical diagnostic instrument.** Outputs are indicators for campaign and resource planning. All clinical decisions require licensed practitioner involvement.
+> ⚠️ **Population-level planning tool — not a clinical diagnostic instrument.** Outputs are indicators for market access, campaign planning, and resource allocation. All clinical decisions require licensed practitioner involvement.
 
 ---
 
 ## What it does
 
-Chronic conditions like Type 2 Diabetes and Hypertension have large undiagnosed populations that never appear in prescription or claims data. These patients leave observable traces — OTC purchases, diagnostic tests without follow-up, GP visits with non-specific complaints — that can be aggregated and scored at the geography level.
-
-This system ingests anonymised, aggregate data across those signal types and produces a **Geography Risk Score** per pin code / district, ranking where undiagnosed burden is most likely concentrated.
+Type 2 Diabetes, Hypertension, and Hypothyroidism have large undiagnosed populations that never appear in prescription or claims data. This platform scores every US county across 7 dimensions — disease burden, diagnosis gap, access to care, social determinants, payer landscape, commercial readiness, and trajectory — to surface where the opportunity to reach undiagnosed patients is highest.
 
 ### Outputs
-- Geography Risk Map (choropleth)
-- Ranked opportunity table with driving signals per geography
-- HCP priority list for diagnosis-support detailing
-- Campaign brief export (CSV/PDF)
+- **Interactive dashboard** — 5-view Streamlit app with opportunity map, county rankings, payer analysis, investment planner, and state drill-down
+- **Opportunity Score** — composite 0–100 score per county, weighted across 7 dimensions
+- **Program recommendation** — per-county recommendation across 5 program types (Payer Partnership, Community Health Center, Employer Wellness, Digital Health, Pharmacy-Based Screening)
+- **Estimated undiagnosed pool** — county-level patient count estimates anchored to published undiagnosis rates
+
+---
+
+## Data Sources (5 real, publicly available)
+
+| Source | Provider | Coverage | Dimensions |
+|--------|----------|----------|------------|
+| PLACES County Health Data | CDC | 2,956 counties | Disease Burden, Diagnosis Gap |
+| American Community Survey (5-year) | US Census Bureau | 3,222 counties | Social Determinants |
+| Medicare Advantage Penetration | CMS | 3,128 counties | Payer Landscape |
+| Health Professional Shortage Areas | HRSA | 3,233 counties | Access to Care |
+| County Health Rankings | Robert Wood Johnson Foundation | 3,152 counties | Access to Care, SDoH backup |
+
+All data is ingested at the aggregate county level. No individual patient records are used at any stage.
 
 ---
 
 ## Architecture
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full tech stack, layer-by-layer design, and build milestones.
+```
+ingest_real_data.py          ← Downloads and caches all 5 real data sources
+        │
+        ▼
+src/features/dimension_scorer.py   ← Scores 3,144 counties across 7 dimensions
+        │
+        ▼
+data/scored/dimension_scores.parquet
+        │
+        ▼
+src/output/dashboard.py      ← Streamlit dashboard (5 views)
+```
 
-**Stack summary:**
-- **Ingestion:** PostgreSQL, GCP, Prefect, Python
-- **Features:** pandas, dbt, scikit-learn
-- **Model:** XGBoost, MLflow, SHAP
-- **Output:** Streamlit, Folium, Tableau
+**Stack:**
+- **Ingestion:** Python, requests, pandas
+- **Storage:** Parquet (local), Neon PostgreSQL (optional cloud sync)
+- **Scoring:** scikit-learn, NumPy, pandas
+- **Dashboard:** Streamlit, Plotly Express, Plotly Graph Objects
+- **Deployment:** Streamlit Cloud
 
 ---
 
@@ -36,19 +60,25 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full tech stack, laye
 
 ```
 silent-patient-pool-finder/
+├── config/
+│   ├── conditions.yaml        ← Condition definitions and undiagnosis rates
+│   ├── dimensions.yaml        ← 7-dimension weights and intervention types
+│   └── us.yaml               ← US geography configuration
+├── data/
+│   ├── open/                  ← Cached real data downloads (gitignored)
+│   └── scored/                ← Scored county parquet files (gitignored)
 ├── docs/
 │   └── ARCHITECTURE.md
-├── data/
-│   └── synthetic/
-├── notebooks/
 ├── src/
 │   ├── ingestion/
+│   │   └── open_data/         ← CDC, Census, CMS, HRSA downloaders
 │   ├── features/
-│   ├── model/
+│   │   └── dimension_scorer.py
 │   └── output/
+│       └── dashboard.py
 ├── tests/
-├── docker-compose.yml
-├── pyproject.toml
+├── ingest_real_data.py        ← Main ingestion + scoring pipeline
+├── requirements.txt
 └── README.md
 ```
 
@@ -56,25 +86,57 @@ silent-patient-pool-finder/
 
 ## Getting Started
 
-> Setup instructions will be added as each milestone is completed.
+### 1. Install dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Set Census API key
+```bash
+export CENSUS_API_KEY=your_key_here
+# Get a free key at: https://api.census.gov/data/key_signup.html
+```
+
+### 3. Run the ingestion pipeline
+```bash
+python3 ingest_real_data.py
+```
+
+This downloads and caches all 5 data sources and scores all 3,144 US counties. Runtime: ~2 minutes on first run, ~5 seconds from cache.
+
+> **Note:** County Health Rankings requires a one-time manual download due to WAF restrictions.
+> Open `https://www.countyhealthrankings.org/sites/default/files/media/document/analytic_data2025_v3.csv`
+> in your browser and save to `data/open/analytic_data_chr.csv`.
+
+### 4. Launch the dashboard
+```bash
+python3 -m streamlit run src/output/dashboard.py
+```
+
+### Optional: sync to Neon PostgreSQL
+```bash
+# Add to .streamlit/secrets.toml:
+# NEON_DATABASE_URL = "postgresql://..."
+python3 ingest_real_data.py --db
+```
 
 ---
 
-## Status
+## Current Status
 
-🟡 **Pre-prototype** — architecture defined, synthetic data pipeline in progress.
+✅ **Live** — 3,144 counties scored from 5 real data sources.
 
 | Milestone | Status |
 |-----------|--------|
-| M1 — Synthetic data pipeline | 🔲 Not started |
-| M2 — Feature engineering | 🔲 Not started |
-| M3 — ML scoring model | 🔲 Not started |
-| M4 — Streamlit dashboard | 🔲 Not started |
-| M5 — Real data integration | 🔲 Not started |
-| M6 — Validation on real data | 🔲 Not started |
+| M1 — Synthetic data pipeline | ✅ Complete |
+| M2 — Feature engineering | ✅ Complete |
+| M3 — ML scoring model | ✅ Complete |
+| M4 — Streamlit dashboard | ✅ Complete |
+| M5 — Real data integration (5 sources) | ✅ Complete |
+| M6 — Validation & stakeholder documentation | 🔄 In progress |
 
 ---
 
 ## Compliance
 
-This project is designed for use with anonymised, aggregate data only. No individual patient records are ingested, stored, or output at any stage. All data partnerships must be reviewed under applicable regulations (DPDP Act, HIPAA, GDPR) before onboarding.
+All data is ingested at the aggregate county level. No individual patient records are used, stored, or output at any stage. All data partnerships must be reviewed under applicable regulations (HIPAA, state privacy laws) before onboarding proprietary data.

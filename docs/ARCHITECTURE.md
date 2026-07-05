@@ -1,144 +1,115 @@
-# Architecture & Tech Stack
+# Architecture
 
-> Silent Patient Pool Finder — a multi-signal inference engine that identifies geographies and HCP clusters with high undiagnosed chronic-disease burden, using pharmacy, lab, and geographic proxy signals.
+> Silent Patient Pool Finder — a county-level market intelligence platform identifying where undiagnosed chronic disease burden is highest across the United States.
 
 ---
 
 ## System Overview
 
 ```
-Raw Data Sources
+Real Data Sources (5)
       │
       ▼
-┌─────────────────┐
-│  Layer 1        │  Ingestion & Storage
-│  PostgreSQL     │  Raw pharmacy, lab, HCP, geo data
-│  GCP / BigQuery │  Scale-out when needed
-│  Prefect        │  Pipeline orchestration
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Layer 2        │  Feature Engineering
-│  Python/pandas  │  Signal computation
-│  dbt            │  Versioned transformations
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Layer 3        │  ML Scoring
-│  XGBoost        │  Primary model
-│  scikit-learn   │  Pipelines & validation
-│  MLflow         │  Experiment tracking
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Layer 4        │  Output & Visualisation
-│  Streamlit      │  Internal dashboard
-│  Folium/Plotly  │  Choropleth risk maps
-│  Tableau        │  Client-facing reports
-└─────────────────┘
+┌─────────────────────────┐
+│  Ingestion Layer        │  ingest_real_data.py
+│  Python + requests      │  Downloads, cleans, and caches county data
+│  pandas                 │  Joins 5 sources onto a 3,144-county spine
+│  Parquet / Neon PG      │  Local cache + optional cloud sync
+└──────────┬──────────────┘
+           │
+           ▼
+┌─────────────────────────┐
+│  Scoring Layer          │  src/features/dimension_scorer.py
+│  7 dimensions scored    │  Disease Burden, Diagnosis Gap, Access to Care,
+│  per county (0–100)     │  Social Determinants, Payer Landscape,
+│  Weighted composite     │  Commercial Readiness, Trajectory
+└──────────┬──────────────┘
+           │
+           ▼
+┌─────────────────────────┐
+│  Dashboard Layer        │  src/output/dashboard.py
+│  Streamlit              │  5-view interactive web app
+│  Plotly                 │  Choropleth map, charts, heatmap
+│  Streamlit Cloud        │  Deployment
+└─────────────────────────┘
 ```
 
 ---
 
-## Layer 1 — Data Ingestion & Storage
+## Layer 1 — Data Ingestion
 
-### Tools
-| Tool | Purpose |
-|------|---------|
-| **PostgreSQL** | Primary relational store for all structured data at prototype stage |
-| **Google Cloud Storage** | Raw data lake — landing zone for partner data drops |
-| **BigQuery** | Scale-out query layer when Postgres hits limits |
-| **Prefect** | Pipeline orchestration — schedules, retries, observability |
-| **Python + pandas** | Ingestion scripts, cleaning, normalisation |
-| **Docker** | Containerised ingestion jobs — runs identically everywhere |
+### Real Data Sources
 
-### Data sources (prototype)
-- Synthea-generated synthetic patient records
-- Anonymised, aggregate pharmacy transaction logs (OTC + Rx)
-- Lab test order records (order metadata only — no clinical values)
-- ICD-10 coded claims data (negative signal — known-diagnosed exclusion)
-- HCP-level Rx prescribing data (IQVIA/AIOCD format)
-- NFHS-5 / Census district-level socioeconomic data (public)
+| Source | File | Provider | Counties | Key Variables |
+|--------|------|----------|----------|---------------|
+| PLACES County Health | `cdc_places_county.parquet` | CDC | 2,956 | Diabetes prevalence, obesity, hypertension, checkup rate |
+| American Community Survey | `census_acs_county.parquet` | US Census Bureau | 3,222 | Poverty rate, income, uninsured rate, education |
+| MA Penetration Report | `cms_ma_penetration.parquet` | CMS | 3,128 | Medicare Advantage enrollment share |
+| Health Professional Shortage Areas | `hrsa_access.parquet` | HRSA | 3,233 | HPSA flag, FQHC count |
+| County Health Rankings | `county_health_rankings.parquet` | Robert Wood Johnson Foundation | 3,152 | Primary care ratio, SDoH backup |
 
-### Privacy architecture
-- All data ingested at **aggregate or anonymised** level
-- No row-level patient identifiers at any stage
-- GCP project configured with HIPAA/DPDP-compliant controls
-- Raw data encrypted at rest (GCP default) and in transit (TLS)
+### County Spine
+
+All sources are joined onto a 3,144-county spine derived from the US Census TIGER county list. Counties missing from a source receive synthetic fallback values derived from national medians and correlated signals.
+
+### Storage
+
+- **Local:** Parquet files in `data/open/` (cached) and `data/scored/` (pipeline output)
+- **Cloud:** Optional Neon PostgreSQL sync — add `NEON_DATABASE_URL` to `.streamlit/secrets.toml`
 
 ---
 
-## Layer 2 — Feature Engineering
+## Layer 2 — 7-Dimension Scoring
 
-### Tools
-| Tool | Purpose |
-|------|---------|
-| **Python + pandas** | Feature computation scripts |
-| **dbt** | SQL-based transformations — versioned, documented, testable |
-| **scikit-learn** | Preprocessing pipelines (scaling, encoding, imputation) |
-| **Synthea** | Synthetic patient data generation for prototype |
+Each county receives a score from 0 to 100 on each dimension. A weighted composite produces the **Opportunity Score**.
 
-### Core signals computed
-1. **OTC Proxy Cluster Score** — co-purchase frequency of symptom-adjacent OTC products per pin code, without corresponding chronic Rx
-2. **Diagnostic Orphan Ratio** — lab test orders (HbA1c, lipid panel, TSH) without follow-up Rx within 90-day window, per HCP cluster
-3. **HCP Symptom-to-Chronic Rx Ratio** — ratio of symptom-adjacent Rx to chronic-disease Rx in an HCP's prescribing portfolio
-4. **Geographic Burden Index** — epidemiological prevalence prior (NFHS-5) divided by observed Rx penetration per district
-5. **Diagnostic Orphan Ratio (Digital)** — teleconsult/health-search query volume without follow-up Rx *(Phase 2)*
+| Dimension | Weight | Key Real Signals |
+|-----------|--------|-----------------|
+| Disease Burden | 20% | CDC diabetes prevalence, obesity rate, hypertension |
+| Diagnosis Gap | 25% | Checkup rate, uninsured rate, CMS diagnosed vs. prevalence gap |
+| Access to Care | 15% | HRSA HPSA designation, FQHC presence, rural flag, CHR primary care ratio |
+| Social Determinants | 15% | Census poverty rate, income, education, uninsured rate |
+| Payer Landscape | 10% | CMS MA penetration, Medicaid rate, commercial coverage |
+| Commercial Readiness | 10% | Broadband access rate, urban flag, income proxy |
+| Trajectory | 5% | Median age, obesity trend proxy, SDoH widening gap |
 
-### Feature engineering principles
-- All features computed at **pin-code or HCP-cluster grain** — never individual patient level
-- Time-windowed aggregations (30d, 90d, 12m lookbacks)
-- Missing data strategy: explicit imputation documented in dbt models
+### Normalization
 
----
+All signals are min-max normalized across all 3,144 counties before weighting. This means scores are relative — a county scoring 80 on Disease Burden is in the top tier of US counties, not at 80% of a fixed ceiling.
 
-## Layer 3 — ML Scoring
+### Opportunity Tiers
 
-### Tools
-| Tool | Purpose |
-|------|---------|
-| **XGBoost / LightGBM** | Primary gradient boosting model for Geography Risk Score |
-| **Logistic Regression** | Interpretable baseline — required for auditability |
-| **scikit-learn** | Cross-validation, pipelines, metrics |
-| **MLflow** | Experiment tracking, model versioning, artifact storage |
-| **SHAP** | Feature importance and model explainability |
+| Tier | Score | Description |
+|------|-------|-------------|
+| Priority | ≥ 55 | Top ~0.3% of counties — confirmed high-need by multiple real sources |
+| Emerging | 40–55 | Strong indicators with access or payer gaps — pipeline development |
+| Developing | < 40 | Lower immediate priority — monitor for trend shifts |
 
-### Model design
-- **Output:** Geography Risk Score (0–100) per pin code / district
-- **Task type:** Regression (risk score) + binary classification (high/low opportunity flag)
-- **Training labels:** Known-diagnosis cohorts from claims data used as positive labels; geography-matched controls as negatives
-- **Validation:** Hold-out geography-level cross-validation (not random row split — to prevent geographic leakage)
-- **Acceptance criterion:** Precision ≥ X% at the geography level (to be defined by stakeholders before training begins)
-
-### Explainability
-- SHAP values computed for every scored geography
-- Every output includes top-3 driving signals — required for client and regulatory credibility
-
-### What this model does NOT do
-- Does not identify or score individual patients
-- Does not produce a clinical diagnosis
-- Outputs are signals for campaign and resource planning — all clinical action requires licensed practitioner involvement
+> **Note on the ≥55 threshold:** With 5 real data sources and 2 dimensions using demographic proxies (Trajectory, Commercial Readiness), the observed score ceiling is approximately 60–62. The threshold is set to select the highest-yield counties meaningfully above the national average (37).
 
 ---
 
-## Layer 4 — Output & Visualisation
+## Layer 3 — Dashboard
 
-### Tools
-| Tool | Purpose |
+### Views
+
+| View | Purpose |
 |------|---------|
-| **Streamlit** | Internal dashboard — fast to build, Python-native |
-| **Folium / Plotly Express** | Choropleth geography risk maps |
-| **Tableau / Looker Studio** | Client-facing reporting (pharma/payer audience) |
-| **PostgreSQL views** | Pre-aggregated output tables for dashboard queries |
+| Market Overview | National KPIs, condition cards, score distribution, program mix |
+| Investment Planner | Ranked county table with filters, heatmap, payer analysis |
+| Geographic | Choropleth opportunity map, state rankings |
+| Payer Landscape | MA penetration analysis, Medicaid/commercial breakdown |
+| State Drill-Down | County-level deep dive within a selected state |
 
-### Output artefacts
-1. **Geography Risk Map** — choropleth of Geography Risk Scores at pin-code / district level
-2. **Opportunity Ranking Table** — top-N geographies ranked by score, with driving signals and estimated undiagnosed pool size
-3. **HCP Priority List** — HCPs ranked by Diagnostic Orphan Ratio and symptom-Rx anomaly score, as targets for diagnosis-support detailing
-4. **Campaign Brief Export** — PDF/CSV export of top geographies for awareness campaign planning
+### Intervention Types
+
+| Program | Best Fit |
+|---------|---------|
+| Payer Partnership Program | MA penetration > 35% — Stars incentives fund screening |
+| Community Health Center Partnership | High SDoH + low access — FQHC delivery model |
+| Employer Wellness Program | High commercial coverage, urban — benefit integration |
+| Digital Health Program | High broadband + commercial — telehealth screening |
+| Pharmacy-Based Screening | All other counties — broad retail access |
 
 ---
 
@@ -146,52 +117,40 @@ Raw Data Sources
 
 | Area | Tool |
 |------|------|
-| Version control | **GitHub** |
-| Containerisation | **Docker + Docker Compose** |
-| Language | **Python 3.11+** |
-| Dependency management | **Poetry** |
-| Code quality | **ruff** (linting), **black** (formatting), **pre-commit** |
-| Testing | **pytest** |
-| Notebooks | **Jupyter** (exploration only — not shipped to production) |
-| Task tracking | **Linear** |
-| Secrets management | **GCP Secret Manager** |
+| Language | Python 3.9+ |
+| Data ingestion | `requests`, `pandas`, `pyarrow` |
+| Scoring | `scikit-learn`, `numpy`, `pandas` |
+| Dashboard | `streamlit`, `plotly` |
+| Database | Neon PostgreSQL (optional), Parquet (default) |
+| Dependency management | pip + `requirements.txt` |
+| Version control | Git / GitHub |
+| Deployment | Streamlit Cloud |
 
 ---
 
-## Build Order (Prototype Milestones)
+## Running the Pipeline
 
-| Milestone | Deliverable | Dependencies |
-|-----------|------------|--------------|
-| M1 | Synthetic data generation pipeline (Synthea → PostgreSQL) | Docker, Postgres setup |
-| M2 | Feature engineering scripts for 3 core signals | M1 complete |
-| M3 | XGBoost model trained on synthetic labels → Geography Risk Score | M2 complete |
-| M4 | Streamlit dashboard with scored map | M3 complete |
-| M5 | First real data integration (pharmacy chain pilot) | Legal review + data partnership |
-| M6 | Model re-validation on real data, false positive rate audit | M5 complete |
+```bash
+# Step 1: ingest all 5 data sources and score all 3,144 counties
+export CENSUS_API_KEY=your_key
+python3 ingest_real_data.py
 
----
+# Step 2: launch dashboard
+python3 -m streamlit run src/output/dashboard.py
 
-## Repository Structure
-
-```
-silent-patient-pool-finder/
-├── docs/
-│   └── ARCHITECTURE.md        ← this file
-├── data/
-│   └── synthetic/             ← Synthea output (gitignored in prod)
-├── notebooks/
-│   └── exploration/           ← Jupyter notebooks (never imported by src/)
-├── src/
-│   ├── ingestion/             ← Data ingestion scripts
-│   ├── features/              ← Feature engineering (dbt models + Python)
-│   ├── model/                 ← Training, evaluation, MLflow logging
-│   └── output/                ← Streamlit dashboard + export scripts
-├── tests/
-├── docker-compose.yml
-├── pyproject.toml
-└── README.md
+# Optional: push scored data to Neon
+python3 ingest_real_data.py --db
 ```
 
 ---
 
-*This document is the source of truth for architecture decisions. Update it when the stack changes — don't let it drift from reality.*
+## Privacy Architecture
+
+- All data ingested at the **aggregate county level** — no individual patient identifiers
+- No row-level patient data used, stored, or output at any stage
+- All external data sources are publicly available government or foundation datasets
+- Proprietary data partnerships must be reviewed under HIPAA and applicable state privacy laws before onboarding
+
+---
+
+*Update this document when the data sources, scoring logic, or stack changes. It is the source of truth for architecture decisions.*
