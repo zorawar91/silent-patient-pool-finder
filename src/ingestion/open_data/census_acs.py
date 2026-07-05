@@ -18,6 +18,7 @@ from __future__ import annotations
 # Source: https://api.census.gov/data/{year}/acs/acs5
 
 import logging
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -27,6 +28,10 @@ log = logging.getLogger(__name__)
 
 CENSUS_API = "https://api.census.gov/data/{year}/acs/acs5"
 ACS_YEAR = 2022
+
+# Census API key — free at https://api.census.gov/data/key_signup.html
+# Set via:  export CENSUS_API_KEY=your_key_here   (add to ~/.zshrc for persistence)
+CENSUS_API_KEY = os.environ.get("CENSUS_API_KEY", "")
 
 # Variables: (api_var, output_col, is_denominator_for)
 ACS_VARS = [
@@ -55,30 +60,83 @@ def download(cache_dir: str = "data/open", force: bool = False, year: int = ACS_
     """
     Fetch ACS 5-year estimates for all US counties.
     Returns one row per county_fips with computed SDoH features.
+
+    SSL strategy (resolves macOS LibreSSL 2.8.3 incompatibility):
+      1. Try with certifi CA bundle — fixes most LibreSSL cert issues
+      2. Retry verify=False — skips cert check entirely
+      Both attempts also try http:// as a last resort per attempt.
     """
     cache_path = Path(cache_dir) / f"census_acs_{year}.parquet"
     Path(cache_dir).mkdir(parents=True, exist_ok=True)
 
     if cache_path.exists() and not force:
-        log.info(f"Census ACS {year}: loading from cache")
-        return pd.read_parquet(cache_path)
+        df = pd.read_parquet(cache_path)
+        if not df.empty:
+            log.info(f"Census ACS {year}: {len(df):,} counties from cache")
+            return df
 
     log.info(f"Census ACS {year}: querying Census API ...")
     var_list = ",".join(v[0] for v in ACS_VARS)
-    url = f"{CENSUS_API.format(year=year)}?get=NAME,{var_list}&for=county:*&in=state:*"
+    # Census API key is required for large county-level queries (free at https://api.census.gov/data/key_signup.html)
+    key_param = f"&key={CENSUS_API_KEY}" if CENSUS_API_KEY else ""
+    if not CENSUS_API_KEY:
+        log.warning(
+            "  Census API key not set — large queries may be rejected with 'Missing Key'.\n"
+            "  Get a free key at: https://api.census.gov/data/key_signup.html\n"
+            "  Then run: export CENSUS_API_KEY=your_key_here"
+        )
+    query = f"?get=NAME,{var_list}&for=county:*&in=state:*{key_param}"
 
+    # Ordered SSL strategies: certifi bundle → verify=False → http://
     try:
-        resp = requests.get(url, timeout=60)
-        resp.raise_for_status()
-        data = resp.json()
-        df = pd.DataFrame(data[1:], columns=data[0])
-        df = _process(df)
-        df.to_parquet(cache_path, index=False)
-        log.info(f"Census ACS: {len(df):,} counties cached")
-        return df
-    except Exception as e:
-        log.warning(f"Census ACS download failed: {e}. Will use synthetic fallback.")
-        return pd.DataFrame()
+        import certifi
+        cert_bundle = certifi.where()
+    except ImportError:
+        cert_bundle = True  # system default
+
+    import urllib3
+    attempts = [
+        {"url": f"https://api.census.gov/data/{year}/acs/acs5{query}", "verify": cert_bundle},
+        {"url": f"https://api.census.gov/data/{year}/acs/acs5{query}", "verify": False},
+        {"url": f"http://api.census.gov/data/{year}/acs/acs5{query}",  "verify": False},
+    ]
+
+    headers = {
+        "User-Agent": "SPPF/1.0 (research; contact zorawarnandwal@gmail.com)",
+        # Disable gzip/deflate — LibreSSL 2.8.3 can return empty body when decompressing
+        "Accept-Encoding": "identity",
+    }
+
+    for attempt in attempts:
+        try:
+            if not attempt["verify"]:
+                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            resp = requests.get(attempt["url"], timeout=60,
+                                verify=attempt["verify"], headers=headers)
+            resp.raise_for_status()
+            text = resp.text.strip()
+            if not text or not text.startswith("[["):
+                log.warning(
+                    f"Census ACS: unexpected response "
+                    f"(verify={attempt['verify']}, url={attempt['url'][:55]}): "
+                    f"{text[:120]!r}"
+                )
+                continue
+            data = resp.json()
+            df = pd.DataFrame(data[1:], columns=data[0])
+            df = _process(df)
+            df.to_parquet(cache_path, index=False)
+            log.info(f"Census ACS: {len(df):,} counties cached "
+                     f"(verify={attempt['verify']})")
+            return df
+        except Exception as e:
+            log.warning(
+                f"Census ACS attempt failed "
+                f"(verify={attempt['verify']}, url={attempt['url'][:55]}): {e}"
+            )
+
+    log.warning("Census ACS: all SSL strategies failed — will use synthetic fallback.")
+    return pd.DataFrame()
 
 
 def _process(df: pd.DataFrame) -> pd.DataFrame:

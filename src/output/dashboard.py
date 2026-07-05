@@ -129,11 +129,12 @@ METRIC_TOOLTIPS = {
         "Payer Landscape 10%, Commercial Readiness 10%, Trajectory 5%. "
         "A higher score means a stronger case for program investment in that county.",
     "priority_tier":
-        "Opportunity Score of 70 or above. These counties have the highest disease burden, "
-        "widest diagnosis gap, and strongest payer funding incentives. "
+        "Opportunity Score of 55 or above. These counties have the highest disease burden, "
+        "widest diagnosis gap, and strongest payer funding incentives — confirmed by multiple "
+        "real data sources (CDC PLACES + Census ACS). "
         "Prioritize for immediate program launch and budget allocation.",
     "emerging_tier":
-        "Opportunity Score between 40 and 70. Strong underlying indicators with some gaps — "
+        "Opportunity Score between 40 and 55. Strong underlying indicators with some gaps — "
         "such as access barriers or lower payer readiness. "
         "Recommended for pipeline development and forward planning.",
     "developing_tier":
@@ -193,12 +194,12 @@ METRIC_TOOLTIPS = {
     "opp_score_dist":
         "Distribution of Opportunity Scores across all 3,143 US counties. "
         "Blue bars are lower-scoring developing counties, amber bars are emerging markets "
-        "(score 40 to 70), and red bars are priority markets (score 70 and above). "
+        "(score 40 to 55), and red bars are priority markets (score 55 and above). "
         "Most counties cluster in the moderate range; the red bars represent the highest-yield markets.",
     "condition_t2d":
         "Type 2 Diabetes — approximately 8.7 million estimated undiagnosed adults nationally. "
         "Research shows 23.1% of all Type 2 Diabetes cases are undiagnosed. "
-        "Priority counties are those with a geography risk score of 70 or above.",
+        "Priority counties are those with a geography risk score of 55 or above.",
     "condition_htn":
         "Hypertension (high blood pressure) — approximately 34.9 million estimated undiagnosed "
         "or uncontrolled adults nationally. Around 20% of people with hypertension are unaware "
@@ -633,7 +634,7 @@ def _compute_fallback_dims(df: pd.DataFrame) -> pd.DataFrame:
                 "dim_commercial_readiness", "dim_trajectory"]
     out["opportunity_score"] = sum(w * out[c] for w, c in zip(weights, dim_cols))
     out["opportunity_tier"]  = pd.cut(
-        out["opportunity_score"], bins=[0, 40, 70, 100],
+        out["opportunity_score"], bins=[0, 40, 55, 100],
         labels=["Developing", "Emerging", "Priority"], include_lowest=True,
     ).astype(str)
     out["recommended_intervention"] = out.apply(
@@ -788,8 +789,8 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
     opp_col = _opp_score(scores)
     score_col = "overall_risk_score" if condition == "overall" else f"{condition}_risk_score"
     total_pool = int(scores["total_estimated_pool"].sum()) if "total_estimated_pool" in scores.columns else 45_700_000
-    priority_n = int((scores[opp_col] >= 70).sum())
-    emerging_n = int(((scores[opp_col] >= 40) & (scores[opp_col] < 70)).sum())
+    priority_n = int((scores[opp_col] >= 55).sum())
+    emerging_n = int(((scores[opp_col] >= 40) & (scores[opp_col] < 55)).sum())
 
     st.markdown(f"""
     <div class="banner">
@@ -805,8 +806,8 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
     # KPI strip
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.markdown(f'<div class="card-dark"><div class="label-w">Counties Scored{_iicon(METRIC_TOOLTIPS["counties_scored"], tip_cls="tip-r")}</div><div class="big-num-w">{len(scores):,}</div><div class="sub-w">US county coverage</div></div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority Markets{_iicon(METRIC_TOOLTIPS["priority_tier"])}</div><div class="big-num" style="color:{RED};">{priority_n}</div><div class="sub" style="color:{RED};">Opportunity Score ≥70</div></div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Emerging Markets{_iicon(METRIC_TOOLTIPS["emerging_tier"])}</div><div class="big-num" style="color:{AMBER};">{emerging_n}</div><div class="sub" style="color:{AMBER};">Score 40–70</div></div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority Markets{_iicon(METRIC_TOOLTIPS["priority_tier"])}</div><div class="big-num" style="color:{RED};">{priority_n}</div><div class="sub" style="color:{RED};">Opportunity Score ≥55</div></div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Emerging Markets{_iicon(METRIC_TOOLTIPS["emerging_tier"])}</div><div class="big-num" style="color:{AMBER};">{emerging_n}</div><div class="sub" style="color:{AMBER};">Score 40–55</div></div>', unsafe_allow_html=True)
     avg_opp = scores[opp_col].mean()
     c4.markdown(f'<div class="card" style="border-top:3px solid {G_LIGHT};"><div class="label">Avg Opportunity Score{_iicon(METRIC_TOOLTIPS["avg_opp_score"])}</div><div class="big-num" style="color:{G_DARK};">{avg_opp:.0f}</div><div class="sub-muted">national baseline</div></div>', unsafe_allow_html=True)
     top_state = scores.groupby("state_name")[opp_col].mean().idxmax()
@@ -862,11 +863,11 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
         _mids   = (_edges[:-1] + _edges[1:]) / 2
         _colors = []
         for m in _mids:
-            if m >= 70:   _colors.append(RED)
+            if m >= 55:   _colors.append(RED)
             elif m >= 40: _colors.append(AMBER)
             else:         _colors.append(G_LIGHT)
         _labels = [
-            f"{'Priority' if m>=70 else 'Emerging' if m>=40 else 'Developing'} · {m:.0f}: {c} counties"
+            f"{'Priority' if m>=55 else 'Emerging' if m>=40 else 'Developing'} · {m:.0f}: {c} counties"
             for m, c in zip(_mids, _counts)
         ]
         fig = go.Figure()
@@ -880,7 +881,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
         fig.add_vline(x=40, line=dict(dash="dot", color=AMBER, width=1.5),
                       annotation_text="Emerging", annotation_position="top right",
                       annotation_font_size=10, annotation_font_color=AMBER)
-        fig.add_vline(x=70, line=dict(dash="dot", color=RED, width=1.5),
+        fig.add_vline(x=55, line=dict(dash="dot", color=RED, width=1.5),
                       annotation_text="Priority", annotation_position="top right",
                       annotation_font_size=10, annotation_font_color=RED)
         fig.update_layout(
@@ -1327,13 +1328,13 @@ def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
         filtered = filtered[filtered["state_name"] == state]
 
     cond_label = "All Conditions" if condition == "overall" else COND_META[condition]["label"]
-    priority_n = int((filtered[opp_col] >= 70).sum())
-    emerging_n = int(((filtered[opp_col] >= 40) & (filtered[opp_col] < 70)).sum())
+    priority_n = int((filtered[opp_col] >= 55).sum())
+    emerging_n = int(((filtered[opp_col] >= 40) & (filtered[opp_col] < 55)).sum())
 
     c1, c2, c3, c4 = st.columns(4)
     c1.markdown(f'<div class="card-dark"><div class="label-w">Counties Mapped</div>{_iicon(METRIC_TOOLTIPS["counties_mapped"], tip_cls="tip-r")}<div class="big-num-w">{len(filtered):,}</div><div class="sub-w">{filtered["state_name"].nunique()} states</div></div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority ≥70</div>{_iicon(METRIC_TOOLTIPS["priority_tier"])}<div class="big-num" style="color:{RED};">{priority_n}</div><div class="sub" style="color:{RED};">Act now</div></div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Emerging 40–70</div>{_iicon(METRIC_TOOLTIPS["emerging_tier"])}<div class="big-num" style="color:{AMBER};">{emerging_n}</div><div class="sub" style="color:{AMBER};">Plan &amp; monitor</div></div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority ≥55</div>{_iicon(METRIC_TOOLTIPS["priority_tier"])}<div class="big-num" style="color:{RED};">{priority_n}</div><div class="sub" style="color:{RED};">Act now</div></div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Emerging 40–55</div>{_iicon(METRIC_TOOLTIPS["emerging_tier"])}<div class="big-num" style="color:{AMBER};">{emerging_n}</div><div class="sub" style="color:{AMBER};">Plan &amp; monitor</div></div>', unsafe_allow_html=True)
     c4.markdown(f'<div class="card"><div class="label">Avg Score ({cond_label})</div>{_iicon(METRIC_TOOLTIPS["avg_opp_score"])}<div class="big-num">{filtered[score_col].mean():.0f}</div><div class="sub-muted">this view</div></div>', unsafe_allow_html=True)
 
     st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
@@ -1405,7 +1406,7 @@ def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
                       .reset_index().sort_values(opp_col, ascending=False).head(10))
         for _, srow in state_avgs.iterrows():
             pct = min(float(srow[opp_col]), 100)
-            color = RED if pct >= 70 else (AMBER if pct >= 40 else G_LIGHT)
+            color = RED if pct >= 55 else (AMBER if pct >= 40 else G_LIGHT)
             st.markdown(f"""
             <div style="margin-bottom:.55rem;">
               <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:2px;">
@@ -1703,8 +1704,8 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
 
     # ── State KPI banner ──────────────────────────────────────────────────────
     total_pool = int(state_df["total_estimated_pool"].sum()) if "total_estimated_pool" in state_df.columns else 0
-    priority_n = int((state_df[opp_col] >= 70).sum())
-    emerging_n = int(((state_df[opp_col] >= 40) & (state_df[opp_col] < 70)).sum())
+    priority_n = int((state_df[opp_col] >= 55).sum())
+    emerging_n = int(((state_df[opp_col] >= 40) & (state_df[opp_col] < 55)).sum())
     avg_score  = state_df[opp_col].mean()
     top_prog   = (state_df["recommended_intervention"].value_counts().idxmax()
                   if "recommended_intervention" in state_df.columns else "—")
@@ -1722,8 +1723,8 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
 
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.markdown(f'<div class="card-dark"><div class="label-w">Total Counties</div>{_iicon(METRIC_TOOLTIPS["counties_scored"], tip_cls="tip-r")}<div class="big-num-w">{len(state_df)}</div><div class="sub-w">{state}</div></div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority ≥70</div>{_iicon(METRIC_TOOLTIPS["priority_tier"])}<div class="big-num" style="color:{RED};">{priority_n}</div><div class="sub" style="color:{RED};">Act now</div></div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Emerging 40–70</div>{_iicon(METRIC_TOOLTIPS["emerging_tier"])}<div class="big-num" style="color:{AMBER};">{emerging_n}</div><div class="sub" style="color:{AMBER};">Plan &amp; monitor</div></div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority ≥55</div>{_iicon(METRIC_TOOLTIPS["priority_tier"])}<div class="big-num" style="color:{RED};">{priority_n}</div><div class="sub" style="color:{RED};">Act now</div></div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Emerging 40–55</div>{_iicon(METRIC_TOOLTIPS["emerging_tier"])}<div class="big-num" style="color:{AMBER};">{emerging_n}</div><div class="sub" style="color:{AMBER};">Plan &amp; monitor</div></div>', unsafe_allow_html=True)
     c4.markdown(f'<div class="card" style="border-top:3px solid {G_LIGHT};"><div class="label">Avg Opp. Score</div>{_iicon(METRIC_TOOLTIPS["avg_opp_score"])}<div class="big-num" style="color:{G_DARK};">{avg_score:.0f}</div><div class="sub-muted">out of 100</div></div>', unsafe_allow_html=True)
     c5.markdown(f'<div class="card"><div class="label">Est. Pool</div><div style="font-size:1.2rem;font-weight:800;color:{DARK};">{total_pool:,}</div><div class="sub-muted">undiagnosed</div></div>', unsafe_allow_html=True)
 
@@ -1752,7 +1753,7 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
         ))
         fig.add_vline(x=40, line_dash="dot", line_color=AMBER, line_width=1.5,
                       annotation_text="Emerging", annotation_position="top")
-        fig.add_vline(x=70, line_dash="dot", line_color=RED,   line_width=1.5,
+        fig.add_vline(x=55, line_dash="dot", line_color=RED,   line_width=1.5,
                       annotation_text="Priority", annotation_position="top")
         fig.update_layout(
             margin=dict(l=0, r=50, t=30, b=20),

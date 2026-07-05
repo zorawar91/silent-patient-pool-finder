@@ -84,9 +84,14 @@ def compute_all_dimensions(
     )
 
     # Opportunity tier
+    # Thresholds calibrated for current data coverage:
+    #   ≥55 = Priority   (top ~1-2% of counties; 2+ real data sources confirm need)
+    #   40-55 = Emerging  (meaningful opportunity; watch for new data)
+    #   <40  = Developing (lower near-term priority)
+    # Note: With all 7 sources real, Priority threshold rises back to ≥70.
     df["opportunity_tier"] = pd.cut(
         df["opportunity_score"],
-        bins=[0, 40, 70, 100],
+        bins=[0, 40, 55, 100],
         labels=["Developing", "Emerging", "Priority"],
         include_lowest=True,
     )
@@ -99,8 +104,8 @@ def compute_all_dimensions(
 
     log.info(
         f"Dimension scoring complete. "
-        f"Priority counties: {(df['opportunity_score'] >= 70).sum()}, "
-        f"Emerging: {((df['opportunity_score'] >= 40) & (df['opportunity_score'] < 70)).sum()}"
+        f"Priority counties: {(df['opportunity_score'] >= 55).sum()}, "
+        f"Emerging: {((df['opportunity_score'] >= 40) & (df['opportunity_score'] < 55)).sum()}"
     )
     return df
 

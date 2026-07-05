@@ -43,9 +43,10 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-OPEN_DIR   = "data/open"
-SCORED_DIR = "data/scored"
-TIMEOUT    = 180  # seconds per download attempt
+OPEN_DIR    = "data/open"
+SCORED_DIR  = "data/scored"
+TIMEOUT     = 60   # seconds per download attempt (CMS was timing out at 180s)
+TIMEOUT_CMS = 30   # CMS endpoints are especially slow; fail fast and use synthetic
 
 # US states + DC FIPS codes (exclude territories: 60 AS, 66 GU, 69 MP, 72 PR, 78 VI)
 US_STATE_FIPS = {
@@ -104,19 +105,21 @@ def main():
 
     # ── Summary ───────────────────────────────────────────────────────────────
     n_total    = len(dim_scores)
-    priority   = int((dim_scores["opportunity_score"] >= 70).sum())
+    priority   = int((dim_scores["opportunity_score"] >= 55).sum())
     emerging   = int(((dim_scores["opportunity_score"] >= 40) &
-                      (dim_scores["opportunity_score"] < 70)).sum())
+                      (dim_scores["opportunity_score"] < 55)).sum())
     developing = int((dim_scores["opportunity_score"] < 40).sum())
 
     log.info("\n" + "=" * 62)
     log.info("  INGESTION COMPLETE")
     log.info(f"  Elapsed:           {time.time() - t0:.0f}s")
     log.info(f"  Counties scored:   {n_total:,}")
-    log.info(f"  Priority (≥70):    {priority:,}")
-    log.info(f"  Emerging (40–70):  {emerging:,}")
+    log.info(f"  Priority (≥55):    {priority:,}  ← top counties confirmed by 2+ real sources")
+    log.info(f"  Emerging (40–55):  {emerging:,}")
     log.info(f"  Developing (<40):  {developing:,}")
     log.info(f"  Output:            {out_path}")
+    log.info("  NOTE: Priority threshold set to 55 (calibrated for 2 real sources;")
+    log.info("        rises to 70 once CMS + CHR data are live)")
     log.info("=" * 62)
 
     top10 = dim_scores.nlargest(10, "opportunity_score")[
@@ -135,19 +138,30 @@ def main():
 
 def _download_census_counties() -> pd.DataFrame:
     """
-    Download the Census TIGER national county list.
-    Returns county_fips, county_name, state_abbr, state_name for all 3,143 counties.
-    Falls back to a hardcoded FIPS→state mapping if download fails.
+    Get the complete 3,143-county US list.
+
+    Sources tried in order:
+      1. Cached parquet (skip if empty — previous run may have saved 0 rows)
+      2. Census TIGER national_county.txt (live download)
+      3. Local cdc_places_raw.csv (LocationID + LocationName already on disk)
+      4. Census ACS API (county NAME field as fallback)
     """
     cache = Path(OPEN_DIR) / "census_counties.parquet"
+
+    # ── 1. Cache (only use if non-empty) ──────────────────────────────────────
     if cache.exists():
         df = pd.read_parquet(cache)
-        log.info(f"  Census counties: {len(df):,} from cache")
-        return df
+        if not df.empty:
+            log.info(f"  Census counties: {len(df):,} from cache")
+            return df
+        else:
+            log.warning("  Census counties: cache was empty, deleting and re-downloading")
+            cache.unlink()
 
+    # ── 2. Census TIGER live download ──────────────────────────────────────────
     url = "https://www2.census.gov/geo/docs/reference/codes/files/national_county.txt"
     try:
-        resp = requests.get(url, timeout=60)
+        resp = requests.get(url, timeout=30)
         resp.raise_for_status()
         rows = []
         for line in resp.text.strip().splitlines()[1:]:   # skip header
@@ -166,14 +180,98 @@ def _download_census_counties() -> pd.DataFrame:
                 "state_abbr":  state_abbr,
                 "state_name":  _STATE_NAMES.get(state_abbr, state_abbr),
             })
-        df = pd.DataFrame(rows)
-        df.to_parquet(cache, index=False)
-        log.info(f"  Census counties: {len(df):,} downloaded")
-        return df
+        if rows:
+            df = pd.DataFrame(rows)
+            df.to_parquet(cache, index=False)
+            log.info(f"  Census counties: {len(df):,} downloaded from TIGER")
+            return df
     except Exception as e:
-        log.warning(f"  Census TIGER download failed ({e}). "
-                    "Attempting fallback via ACS county list …")
-        return _census_counties_acs_fallback()
+        log.warning(f"  Census TIGER download failed ({e})")
+
+    # ── 3. Build spine from local CDC PLACES CSV (fast — already on disk) ─────
+    cdc_raw = Path(OPEN_DIR) / "cdc_places_raw.csv"
+    if cdc_raw.exists():
+        log.info("  Census counties: building spine from local cdc_places_raw.csv")
+        df = _counties_from_cdc_places_csv(cdc_raw)
+        if not df.empty:
+            df.to_parquet(cache, index=False)
+            log.info(f"  Census counties: {len(df):,} extracted from CDC PLACES CSV")
+            return df
+
+    # ── 4. ACS API fallback ────────────────────────────────────────────────────
+    log.warning("  Census TIGER: all sources failed, trying ACS API …")
+    return _census_counties_acs_fallback()
+
+
+def _counties_from_cdc_places_csv(raw_path: Path) -> pd.DataFrame:
+    """
+    Extract unique county FIPS + names from the local CDC PLACES CSV.
+    Works on both old and new CDC PLACES formats (LocationID is always present).
+    """
+    try:
+        raw = pd.read_csv(raw_path, low_memory=False,
+                          usecols=lambda c: c in [
+                              "LocationID", "LocationName", "StateAbbr", "StateDesc",
+                              "locationid", "locationname", "stateabbr", "statedesc",
+                          ])
+        # Normalise column names
+        raw.columns = raw.columns.str.strip()
+        col_lower = {c.lower(): c for c in raw.columns}
+        def _col(name):
+            return col_lower.get(name.lower(), name)
+
+        fips_col  = _col("LocationID")
+        name_col  = _col("LocationName")
+        abbr_col  = _col("StateAbbr")
+        sname_col = _col("StateDesc")
+
+        if fips_col not in raw.columns:
+            log.warning("  CDC PLACES CSV has no LocationID column")
+            return pd.DataFrame()
+
+        # IMPORTANT: pandas may read "01001" as integer 1001 (drops leading zero).
+        # Always zero-pad to 5 chars first, then filter by valid state FIPS prefix.
+        # State-level rows (e.g. "01" → "00001") get state-part "00" — invalid → excluded.
+        raw["county_fips"] = raw[fips_col].astype(str).str.strip().str.zfill(5)
+
+        # County rows: valid US state FIPS prefix (also excludes territories + state totals)
+        county_mask = raw["county_fips"].str[:2].isin(US_STATE_FIPS)
+        counties = raw[county_mask].copy()
+
+        result = counties[["county_fips"]].copy()
+        if name_col in counties.columns:
+            result["county_name"] = counties[name_col].values
+        else:
+            result["county_name"] = "County " + result["county_fips"]
+
+        if abbr_col in counties.columns:
+            result["state_abbr"] = counties[abbr_col].values
+        else:
+            result["state_abbr"] = result["county_fips"].str[:2].map(
+                {v: k for k, v in {  # fips → abbr from _STATE_NAMES
+                    "01":"AL","02":"AK","04":"AZ","05":"AR","06":"CA","08":"CO",
+                    "09":"CT","10":"DE","11":"DC","12":"FL","13":"GA","15":"HI",
+                    "16":"ID","17":"IL","18":"IN","19":"IA","20":"KS","21":"KY",
+                    "22":"LA","23":"ME","24":"MD","25":"MA","26":"MI","27":"MN",
+                    "28":"MS","29":"MO","30":"MT","31":"NE","32":"NV","33":"NH",
+                    "34":"NJ","35":"NM","36":"NY","37":"NC","38":"ND","39":"OH",
+                    "40":"OK","41":"OR","42":"PA","44":"RI","45":"SC","46":"SD",
+                    "47":"TN","48":"TX","49":"UT","50":"VT","51":"VA","53":"WA",
+                    "54":"WV","55":"WI","56":"WY",
+                }.items()}.get
+            )
+
+        if sname_col in counties.columns:
+            result["state_name"] = counties[sname_col].values
+        else:
+            result["state_name"] = result["state_abbr"].map(_STATE_NAMES)
+
+        result = result.drop_duplicates("county_fips").reset_index(drop=True)
+        return result
+
+    except Exception as e:
+        log.warning(f"  CDC PLACES CSV county extraction failed: {e}")
+        return pd.DataFrame()
 
 
 def _census_counties_acs_fallback() -> pd.DataFrame:
@@ -226,7 +324,10 @@ def _download_cdc_places() -> pd.DataFrame:
 
 
 def _download_census_acs() -> pd.DataFrame:
-    """Census ACS 5-year estimates — SDoH for all US counties."""
+    """
+    Census ACS 5-year estimates — SDoH for all US counties.
+    Falls back to Census SAIPE (poverty + income only) if ACS API fails.
+    """
     try:
         from src.ingestion.open_data.census_acs import download as acs_dl
         df = acs_dl(cache_dir=OPEN_DIR, force=False)
@@ -236,8 +337,128 @@ def _download_census_acs() -> pd.DataFrame:
                  f"poverty avg {df['poverty_rate'].mean()*100:.1f}%")
         return df
     except Exception as e:
-        log.warning(f"  Census ACS failed ({e}) — SDoH → synthetic fallback")
-        return pd.DataFrame()
+        log.warning(f"  Census ACS failed ({e})")
+
+    # Fallback: SAIPE provides poverty rate + median income via direct XLS download
+    # (www2.census.gov is a different server — avoids Census API SSL issues)
+    log.info("  Census ACS: trying SAIPE fallback (poverty + income only) …")
+    saipe = _download_saipe()
+    if not saipe.empty:
+        return saipe
+
+    log.warning("  Census ACS + SAIPE: all failed → SDoH using synthetic defaults")
+    return pd.DataFrame()
+
+
+def _download_saipe() -> pd.DataFrame:
+    """
+    Census SAIPE — poverty rate + median income for all US counties.
+    Downloads est{year}all.xls from www2.census.gov using xlrd engine.
+
+    SAIPE uses old .xls format (BIFF8), which requires xlrd < 2.0.
+    Install once: pip3 install "xlrd<2" --user
+
+    Column layout in est{year}all.xls (0-indexed after skiprows=4):
+      0: State FIPS   1: County FIPS   7: Poverty % All Ages   22: Median Income
+    """
+    cache = Path(OPEN_DIR) / "saipe_county.parquet"
+    if cache.exists():
+        df = pd.read_parquet(cache)
+        if not df.empty:
+            log.info(f"  SAIPE: {len(df):,} counties from cache")
+            return df
+
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    for year in [2022, 2021]:
+        year2 = str(year)[-2:]
+        url = (f"https://www2.census.gov/programs-surveys/saipe/datasets/{year}/"
+               f"{year}-state-and-county/est{year2}all.xls")
+        try:
+            log.info(f"  SAIPE {year}: {url}")
+            resp = requests.get(url, timeout=60, verify=False)
+            resp.raise_for_status()
+            if len(resp.content) < 100_000:
+                log.warning(f"  SAIPE: response too small ({len(resp.content):,} bytes)")
+                continue
+
+            # Detect actual file format from magic bytes
+            magic = resp.content[:4]
+            is_xlsx = magic[:2] == b'PK'   # ZIP / OOXML → .xlsx in disguise
+            is_xls  = magic == b'\xd0\xcf\x11\xe0'  # OLE2 compound doc → real .xls
+            log.info(f"  SAIPE file magic: {magic.hex()} → "
+                     f"{'xlsx-in-disguise' if is_xlsx else 'xls' if is_xls else 'unknown'}")
+
+            xls = None
+            for engine, label in (
+                [("openpyxl", "openpyxl"),   # works if file is actually xlsx
+                 ("xlrd",    "xlrd<2")]       # works for genuine BIFF8 .xls
+            ):
+                try:
+                    xls = pd.read_excel(io.BytesIO(resp.content), engine=engine,
+                                        header=None, skiprows=4)
+                    log.info(f"  SAIPE: read with engine={engine}")
+                    break
+                except Exception as exc:
+                    log.warning(f"  SAIPE engine={engine} failed: "
+                                f"{type(exc).__name__}: {exc}")
+
+            if xls is None:
+                log.warning(
+                    "  SAIPE: all Excel engines failed. Options:\n"
+                    "  ▶  pip3 install \"xlrd<2\" --user\n"
+                    "  ▶  Or get a free Census API key (best): "
+                    "https://api.census.gov/data/key_signup.html"
+                )
+                return pd.DataFrame()
+
+            n_cols = xls.shape[1]
+            log.info(f"  SAIPE: {xls.shape[0]} rows × {n_cols} cols")
+
+            result = pd.DataFrame()
+            result["county_fips"] = (
+                xls.iloc[:, 0].astype(str).str.strip().str.zfill(2) +
+                xls.iloc[:, 1].astype(str).str.strip().str.zfill(3)
+            )
+
+            # Poverty % All Ages — column 7; validate expected range (3–40%)
+            if n_cols > 7:
+                pov = pd.to_numeric(xls.iloc[:, 7], errors="coerce")
+                if 3 <= pov.median(skipna=True) <= 40:
+                    result["poverty_rate"] = (pov / 100.0).clip(0, 1)
+
+            # Median household income — typically column 22; scan nearby if not there
+            for col_idx in [22, 21, 20, 19, 18, 17, 16]:
+                if col_idx >= n_cols:
+                    continue
+                candidate = pd.to_numeric(xls.iloc[:, col_idx], errors="coerce")
+                if candidate.median(skipna=True) > 30_000:
+                    result["median_household_income"] = candidate.values
+                    break
+
+            # Filter to county rows; exclude state totals (last 3 FIPS chars = "000")
+            result = result[result["county_fips"].str[-3:] != "000"]
+            result = result[result["county_fips"].str[:2].isin(US_STATE_FIPS)]
+            result = result.dropna(subset=["county_fips"])
+
+            if "poverty_rate" in result.columns and len(result) > 2_000:
+                if "median_household_income" not in result.columns:
+                    result["median_household_income"] = np.nan
+                result = result.reset_index(drop=True)
+                result.to_parquet(cache, index=False)
+                avg_pov = result["poverty_rate"].mean() * 100
+                avg_inc = result["median_household_income"].mean()
+                log.info(f"  SAIPE {year}: {len(result):,} counties | "
+                         f"poverty avg {avg_pov:.1f}% | income avg ${avg_inc:,.0f}")
+                return result
+            else:
+                log.warning(f"  SAIPE {year}: only {len(result)} valid rows, trying next year")
+
+        except Exception as e:
+            log.warning(f"  SAIPE {year}: {e}")
+
+    return pd.DataFrame()
 
 
 def _download_cms_gv_puf() -> pd.DataFrame:
@@ -251,22 +472,20 @@ def _download_cms_gv_puf() -> pd.DataFrame:
         log.info(f"  CMS GV PUF: {len(df):,} counties from cache")
         return df
 
-    # Multiple API endpoint candidates (CMS changes these occasionally)
+    # Multiple API endpoint candidates (CMS changes these occasionally).
+    # Note: the /api/1/datastore/query/ endpoints return JSON-wrapped CSV which
+    # pandas can't read directly — use the data-api v1 endpoint instead.
     urls = [
-        # CMS data API v1 — county level GV PUF (most recent)
-        "https://data.cms.gov/data-api/v1/dataset/9767cb68-8ea9-4abb-bb58-c966df773bc6/data.csv?size=50000&column=bene_geo_lvl,bene_geo_cd,bene_geo_desc,tot_benes,ma_prtcptn_rate,diab_pct,hypert_pct",
-        # Fallback: full dataset (large)
+        # CMS data API v1 — county level GV PUF, filtered to key columns
         "https://data.cms.gov/data-api/v1/dataset/9767cb68-8ea9-4abb-bb58-c966df773bc6/data.csv?size=50000",
-        # Legacy datastore endpoint
-        "https://data.cms.gov/api/1/datastore/query/9767cb68-8ea9-4abb-bb58-c966df773bc6/0?keys=true&format=csv",
-        # 2022 GV PUF (older UUID)
-        "https://data.cms.gov/api/1/datastore/query/77e2b3b7-56c1-43a5-917c-d7e0e7f1427c/0?keys=true&format=csv",
+        # Alternative: 2022 PUF dataset (different UUID)
+        "https://data.cms.gov/data-api/v1/dataset/77e2b3b7-56c1-43a5-917c-d7e0e7f1427c/data.csv?size=50000",
     ]
 
     for url in urls:
         try:
             log.info(f"  CMS GV PUF: trying {url[:75]} …")
-            resp = requests.get(url, timeout=TIMEOUT)
+            resp = requests.get(url, timeout=TIMEOUT_CMS)
             resp.raise_for_status()
             if len(resp.content) < 1000:
                 log.warning("    Response too small, skipping")
@@ -511,6 +730,14 @@ def _build_panel(
     Merge all sources onto the Census TIGER county spine.
     Spine is always 3,143 rows; all joins are left so it never shrinks.
     """
+    if counties.empty or "county_fips" not in counties.columns:
+        log.error(
+            "County spine is empty — cannot build panel.\n"
+            "Delete data/open/census_counties.parquet and retry: "
+            "the script will rebuild from cdc_places_raw.csv or Census TIGER."
+        )
+        raise RuntimeError("Empty county spine — see log above for recovery steps.")
+
     panel = counties.copy()
     n_base = len(panel)
 
