@@ -84,11 +84,12 @@ def compute_all_dimensions(
     )
 
     # Opportunity tier
-    # Thresholds calibrated for current data coverage:
-    #   ≥55 = Priority   (top ~1-2% of counties; 2+ real data sources confirm need)
+    # Threshold calibrated to 5 real data sources (CDC PLACES, Census ACS, CMS MA,
+    # HRSA, County Health Rankings). Max observable score ~60-62; top 10 counties
+    # score 55-61. Threshold of 55 selects the top ~0.3% of counties.
+    #   ≥55 = Priority   (confirmed high-need by multiple real sources)
     #   40-55 = Emerging  (meaningful opportunity; watch for new data)
     #   <40  = Developing (lower near-term priority)
-    # Note: With all 7 sources real, Priority threshold rises back to ≥70.
     df["opportunity_tier"] = pd.cut(
         df["opportunity_score"],
         bins=[0, 40, 55, 100],

@@ -118,8 +118,7 @@ def main():
     log.info(f"  Emerging (40–55):  {emerging:,}")
     log.info(f"  Developing (<40):  {developing:,}")
     log.info(f"  Output:            {out_path}")
-    log.info("  NOTE: Priority threshold set to 55 (calibrated for 2 real sources;")
-    log.info("        rises to 70 once CMS + CHR data are live)")
+    log.info("  NOTE: Priority threshold = 55 (5 real sources; max observable score ~60-62)")
     log.info("=" * 62)
 
     top10 = dim_scores.nlargest(10, "opportunity_score")[
