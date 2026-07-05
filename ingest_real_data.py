@@ -568,9 +568,11 @@ def _download_cms_ma_penetration_report() -> pd.DataFrame:
     Provides ma_penetration_rate; used as fallback when GV PUF fails.
     """
     zip_urls = [
-        # CMS county-level MA + Part D penetration (published monthly)
-        "https://www.cms.gov/files/zip/2024-county-level-state-market-penetration-by-plan.zip",
-        "https://www.cms.gov/files/zip/2023-county-level-state-market-penetration-by-plan.zip",
+        # CMS county-level MA penetration — new URL format (old year-prefixed paths 404 since 2024)
+        "https://www.cms.gov/files/zip/ma-state/county-penetration-december-2024.zip",
+        "https://www.cms.gov/files/zip/ma-state/county-penetration-november-2024.zip",
+        "https://www.cms.gov/files/zip/ma-state/county-penetration-january-2025.zip",
+        "https://www.cms.gov/files/zip/ma-state/county-penetration-october-2024.zip",
     ]
     for url in zip_urls:
         try:
@@ -635,16 +637,24 @@ def _download_county_health_rankings() -> pd.DataFrame:
         log.info(f"  CHR: {len(df):,} counties from cache")
         return df
 
+    # CHR blocks direct downloads without a Referer header (returns 403)
+    _chr_headers = {
+        "User-Agent": "SPPF/1.0 (research; contact zorawarnandwal@gmail.com)",
+        "Referer": "https://www.countyhealthrankings.org/health-data/methodology-and-sources/data-documentation",
+        "Accept": "text/csv,*/*",
+        "Accept-Encoding": "identity",
+    }
     urls = [
+        # 2025 release (v3 — latest available)
+        "https://www.countyhealthrankings.org/sites/default/files/media/document/analytic_data2025_v3.csv",
         "https://www.countyhealthrankings.org/sites/default/files/media/document/analytic_data2024.csv",
         "https://www.countyhealthrankings.org/sites/default/files/media/document/analytic_data2023.csv",
-        "https://www.countyhealthrankings.org/sites/default/files/media/document/analytic_data2022.csv",
     ]
 
     for url in urls:
         try:
             log.info(f"  CHR: downloading {url}")
-            resp = requests.get(url, timeout=TIMEOUT)
+            resp = requests.get(url, timeout=TIMEOUT, headers=_chr_headers)
             resp.raise_for_status()
             if len(resp.content) < 100_000:
                 log.warning(f"  CHR: file too small ({len(resp.content):,} bytes), skipping")
