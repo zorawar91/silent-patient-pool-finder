@@ -105,7 +105,7 @@ def run_pipeline(
             Path(scored_dir).mkdir(parents=True, exist_ok=True)
             dim_scores.to_parquet(dim_scores_path, index=False)
             log.info(f"✓ 7-dimension scoring complete ({time.time()-t0:.1f}s)")
-            log.info(f"  Priority counties (score≥70): {(dim_scores['opportunity_score'] >= 70).sum()}")
+            log.info(f"  Priority counties (score≥55): {(dim_scores['opportunity_score'] >= 55).sum()}")
         except Exception as exc:
             log.warning(f"Open data / dimension scoring failed ({exc}). Continuing without it.")
     else:

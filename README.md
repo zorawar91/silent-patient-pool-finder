@@ -105,8 +105,12 @@ python3 ingest_real_data.py
 This downloads and caches all 5 data sources and scores all 3,144 US counties. Runtime: ~2 minutes on first run, ~5 seconds from cache.
 
 > **Note:** County Health Rankings requires a one-time manual download due to WAF restrictions.
-> Open `https://www.countyhealthrankings.org/sites/default/files/media/document/analytic_data2025_v3.csv`
-> in your browser and save to `data/open/analytic_data_chr.csv`.
+> Visit [countyhealthrankings.org → Health Data](https://www.countyhealthrankings.org/health-data/methodology-and-sources/data-documentation),
+> download the current analytic data file, and save it to `data/open/analytic_data_chr.csv`.
+>
+> ⚠️ **CHR continuity note:** RWJ Foundation funding for CHR&R ends December 2026. The data is being
+> preserved as an open-source project on GitHub. If the main site is unavailable, check
+> [github.com/chrr-data](https://github.com/chrr-data) for the latest release.
 
 ### 4. Launch the dashboard
 ```bash

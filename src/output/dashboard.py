@@ -68,16 +68,6 @@ DIM_ICONS = {
     "trajectory":           "📈",
 }
 
-DIM_SHORT = {
-    "disease_burden":       "Disease Burden",
-    "diagnosis_gap":        "Diagnosis Gap",
-    "access_to_care":       "Access to Care",
-    "social_determinants":  "Social Determinants",
-    "payer_landscape":      "Payer Landscape",
-    "commercial_readiness": "Commercial Readiness",
-    "trajectory":           "Trajectory",
-}
-
 # Tooltip text shown on ℹ hover — used in the heatmap column headers
 DIM_TOOLTIPS = {
     "disease_burden": (
@@ -790,7 +780,7 @@ def render_sidebar(scores: pd.DataFrame):
         st.markdown(f"""<div style="font-size:.68rem;color:{MUTED};line-height:1.6;">
           ⚠️ Population-level planning tool only.<br>
           Not a clinical diagnostic instrument.<br>
-          All scoring uses synthetic &amp; open data.<br>
+          Data: 5 real public health sources.<br>
           <span style="color:{G_LIGHT};font-weight:600;">v2.0 — 7-Dimension Framework</span>
         </div>""", unsafe_allow_html=True)
 
@@ -1480,7 +1470,7 @@ def view_payer_landscape(scores: pd.DataFrame, state: str, top_n: int):
 
     if payer_synthetic:
         st.info("📊 Showing **estimated** payer mix (SES-calibrated synthetic data). "
-                "Run `python3 run.py` to load real CMS county-level payer data.")
+                "Run `python3 ingest_real_data.py` to load real CMS county-level payer data.")
 
     # KPI strip
     ma_avg  = filtered["ma_penetration_rate"].mean() * 100
@@ -1947,8 +1937,6 @@ def main():
 
     elif view == "Payer Landscape":
         view_payer_landscape(scores, state, top_n)
-
-    pass  # tooltip handled entirely by CSS ::after (overflow:visible on Streamlit containers)
 
 
 if __name__ == "__main__":

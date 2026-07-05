@@ -2,11 +2,11 @@ from __future__ import annotations
 """
 Real Data Ingestion v2 — Silent Patient Pool Finder
 ====================================================
-Builds a COMPLETE 3,143-county panel from real public data.
+Builds a COMPLETE 3,144-county panel from real public data.
 
 ROOT CAUSE FIXED:
   v1 anchored on data/synthetic/counties.parquet (259 rows) → all left-joins
-  capped at 259.  v2 uses Census TIGER as the spine (3,143 US counties).
+  capped at 259.  v2 uses Census TIGER as the spine (3,144 US counties).
 
 Data sources:
   1. Census TIGER national_county.txt  → county FIPS spine (3,143 counties)
@@ -65,7 +65,7 @@ US_STATE_FIPS = {
 def main():
     t0 = time.time()
     log.info("=" * 62)
-    log.info("  SPPF Real Data Ingestion v2 — Full 3,143-County Panel")
+    log.info("  SPPF Real Data Ingestion v2 — Full 3,144-County Panel")
     log.info("=" * 62)
 
     Path(OPEN_DIR).mkdir(parents=True, exist_ok=True)

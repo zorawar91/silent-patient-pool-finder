@@ -13,7 +13,9 @@ requests>=2.31      # HTTP client
 # Feature engineering
 scikit-learn>=1.4
 
-# ML model
+# ML model (legacy pipeline: run.py → src/model/train.py + src/model/score.py)
+# Not used by the real-data pipeline (ingest_real_data.py + dimension_scorer.py).
+# Keep if running the synthetic XGBoost pipeline; safe to remove otherwise.
 xgboost>=2.0
 shap>=0.44
 joblib>=1.3
