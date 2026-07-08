@@ -215,6 +215,12 @@ COUNTY_CHECKS: list[Check] = (
     + [max_null_share(c, 0.05, remedy=RERUN_COUNTY) for c in _DIM_COLS]
     + [min_std(c, 0.5, remedy=RERUN_COUNTY) for c in _DIM_COLS]
     + [
+        # Percentile + confidence grade (WARN — additive columns, older
+        # parquets may predate them)
+        max_null_share("opportunity_percentile", 0.01, WARN,
+                       "Percentile missing — re-run ingest_real_data.py."),
+        max_null_share("confidence_grade", 0.01, WARN,
+                       "Confidence grade missing — re-run ingest_real_data.py."),
         # Coverage of key raw signals (WARN — degraded but usable)
         max_null_share("diabetes_prevalence_pct", 0.10, WARN,
                        "CDC PLACES coverage degraded — check download."),

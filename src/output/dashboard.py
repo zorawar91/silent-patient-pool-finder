@@ -1399,6 +1399,7 @@ def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
     st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
 
     export_cols = [c for c in ["county_name","state_name","population",opp_col,
+                                "opportunity_percentile","confidence_grade",
                                 score_col,"opportunity_tier","recommended_intervention",
                                 "total_estimated_pool"] if c in top.columns]
     csv = top[export_cols].to_csv(index=False)
@@ -1690,10 +1691,14 @@ def _render_county_scorecard(row: pd.Series, opp_col: str,
     </div>""", unsafe_allow_html=True)
 
     c1, c2, c3, c4 = st.columns(4)
+    pctl  = row.get("opportunity_percentile")
+    pctl_str = f"{pctl:.0f}th percentile of 3,144 counties" if pd.notna(pctl) else "out of 100"
+    conf  = str(row.get("confidence_grade", "")) or ""
+    conf_str = f" · data confidence {conf}" if conf in ("A", "B", "C") else ""
     c1.markdown(f"""<div class="card-dark">
       <div class="label-w">Opportunity Score</div>
       <div class="big-num-w">{opp_val:.0f}</div>
-      <div class="sub-w">out of 100</div></div>""", unsafe_allow_html=True)
+      <div class="sub-w">{pctl_str}{conf_str}</div></div>""", unsafe_allow_html=True)
     c2.markdown(f"""<div class="card" style="border-top:3px solid {DIM_COLORS['diagnosis_gap']};">
       <div class="label">Risk Score ({cond_label})</div>
       <div class="big-num">{risk_val:.0f}</div>
@@ -1990,8 +1995,9 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
       <tbody>{rows_html}</tbody>
     </table>""", unsafe_allow_html=True)
 
-    export_cols = [c for c in ["county_name", "population", opp_col, score_col,
-                                "opportunity_tier", "recommended_intervention",
+    export_cols = [c for c in ["county_name", "population", opp_col,
+                                "opportunity_percentile", "confidence_grade",
+                                score_col, "opportunity_tier", "recommended_intervention",
                                 "total_estimated_pool"] if c in top.columns]
     csv = top[export_cols].to_csv(index=False)
     st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
@@ -2352,7 +2358,8 @@ def _render_zip_rankings(df: pd.DataFrame, score_col: str):
         return
 
     display_cols = ["zcta5", score_col]
-    for c in ["zip_opportunity_tier", "state_name", "zip_total_pool",
+    for c in ["zip_opportunity_percentile", "zip_confidence_grade",
+              "zip_opportunity_tier", "state_name", "zip_total_pool",
               "diabetes_prevalence_pct", "poverty_rate", "zip_recommended_intervention"]:
         if c in ranked.columns:
             display_cols.append(c)
@@ -2370,12 +2377,17 @@ def _render_zip_rankings(df: pd.DataFrame, score_col: str):
         pov_val    = f"{row['poverty_rate']*100:.1f}%" if "poverty_rate" in row and pd.notna(row.get("poverty_rate")) else "—"
         state_val  = str(row.get("state_name", ""))[:2] if "state_name" in row else "—"
         prog_val   = str(row.get("zip_recommended_intervention", ""))[:22] if "zip_recommended_intervention" in row else "—"
+        pctl_val   = f"{row['zip_opportunity_percentile']:.0f}" if pd.notna(row.get("zip_opportunity_percentile")) else "—"
+        grade_val  = str(row.get("zip_confidence_grade", "")) or "—"
+        grade_col  = {"A": G_DARK, "B": "#F4A261", "C": "#E63946"}.get(grade_val, MUTED)
         rows_html += (
             f"<tr>"
             f"<td style='color:{MUTED};font-size:.7rem;'>{int(row['Rank'])}</td>"
             f"<td><strong>{row['zcta5']}</strong></td>"
             f"<td>{state_val}</td>"
             f"<td>{_score_bar(score_val, G_DARK if score_val >= 55 else G_MID)}</td>"
+            f"<td style='color:{MUTED};font-size:.73rem;'>{pctl_val}</td>"
+            f"<td style='color:{grade_col};font-weight:700;'>{grade_val}</td>"
             f"<td><span class='pill {tier_cls}'>{tier}</span></td>"
             f"<td>{pool_val}</td>"
             f"<td>{diab_val}</td>"
@@ -2386,7 +2398,7 @@ def _render_zip_rankings(df: pd.DataFrame, score_col: str):
 
     st.markdown(
         f'<table class="tbl"><thead><tr>'
-        f'<th>#</th><th>ZIP</th><th>St.</th><th>Score</th><th>Tier</th>'
+        f'<th>#</th><th>ZIP</th><th>St.</th><th>Score</th><th>Pctl</th><th>Conf</th><th>Tier</th>'
         f'<th>Est. Pool</th><th>T2D%</th><th>Poverty%</th><th>Program</th>'
         f'</tr></thead><tbody>{rows_html}</tbody></table>',
         unsafe_allow_html=True,

@@ -1218,6 +1218,19 @@ def _fill_missing(df: pd.DataFrame) -> pd.DataFrame:
     Preserves geographic variation far better than a flat national median.
     """
     df = df.copy()
+
+    # Capture TRUE data coverage BEFORE filling — the confidence grade
+    # (dimension_scorer._confidence_grade) needs to know which counties were
+    # actually observed vs. median-filled. Without this, every county grades A.
+    try:
+        from src.features.dimension_scorer import _SOURCE_MARKERS
+        df["confidence_sources_raw"] = sum(
+            df[c].notna().astype(int)
+            for c in _SOURCE_MARKERS.values() if c in df.columns
+        )
+    except Exception:
+        pass
+
     df["_sfips"] = df["county_fips"].str[:2]
 
     for col, default in _DEFAULTS.items():

@@ -105,10 +105,34 @@ def score_zctas(
     # 7. Estimated patient pool per ZCTA
     panel = _estimate_pool(panel)
 
+    # 8. Percentile score + data-coverage confidence grade
+    panel["zip_opportunity_percentile"] = (
+        panel["zip_opportunity_score"].rank(pct=True) * 100
+    ).round(1)
+    panel["zip_confidence_grade"] = _zip_confidence_grade(panel)
+
     n_valid = panel["zip_opportunity_score"].notna().sum()
     n_pri   = int((panel["zip_opportunity_score"] >= 55).sum())
     log.info(f"ZIP scorer: {n_valid:,} ZCTAs scored | {n_pri:,} priority (≥55)")
     return panel.reset_index(drop=True)
+
+
+def _zip_confidence_grade(panel: pd.DataFrame) -> pd.Series:
+    """
+    Grade each ZCTA by real data coverage:
+      A — direct ZCTA-level CDC + ACS data AND county-derived dims present
+      B — direct ZCTA data present, county downscale missing (or vice versa)
+      C — mostly proxies/defaults
+    """
+    has_cdc    = panel.get("diabetes_prevalence_pct", pd.Series(index=panel.index)).notna()
+    has_acs    = panel.get("poverty_rate", pd.Series(index=panel.index)).notna()
+    has_county = panel.get("zip_dim_payer_landscape", pd.Series(index=panel.index)).notna()
+
+    n = has_cdc.astype(int) + has_acs.astype(int) + has_county.astype(int)
+    grade = pd.Series("C", index=panel.index)
+    grade[n >= 2] = "B"
+    grade[n == 3] = "A"
+    return grade
 
 
 # ─────────────────────────────────────────────────────────────────────────────

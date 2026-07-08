@@ -103,6 +103,16 @@ def compute_all_dimensions(
     # Investment priority rank
     df["priority_rank"] = df["opportunity_score"].rank(ascending=False).astype(int)
 
+    # Percentile score (0-100 = share of counties this county outranks).
+    # This is the buyer-facing number: "94th percentile" is self-explanatory,
+    # whereas the raw weighted composite tops out around ~62 by construction.
+    df["opportunity_percentile"] = (
+        df["opportunity_score"].rank(pct=True) * 100
+    ).round(1)
+
+    # Data-coverage confidence grade (A/B/C) per county
+    df["confidence_grade"], df["confidence_sources"] = _confidence_grade(df)
+
     log.info(
         f"Dimension scoring complete. "
         f"Priority counties: {(df['opportunity_score'] >= 55).sum()}, "
@@ -453,6 +463,49 @@ def _recommend_intervention(row: pd.Series) -> str:
 
     # Default: Pharmacy-based screening
     return "Pharmacy-Based Screening"
+
+
+# ── Confidence Grade ──────────────────────────────────────────────────────────
+
+# One representative column per real data source. A county's confidence grade
+# reflects how many independent sources actually cover it — counties scored
+# mostly from fallback proxies get a visibly lower grade.
+_SOURCE_MARKERS = {
+    "CDC PLACES":             "diabetes_prevalence_pct",
+    "CDC PLACES prior":       "diabetes_prev_prior",
+    "Census ACS":             "poverty_rate",
+    "CMS GV PUF":             "ma_penetration_rate",
+    "HRSA":                   "hpsa_flag",
+    "County Health Rankings": "chr_poor_health_pct",
+    "USDA Food Atlas":        "food_desert_pct",
+}
+
+
+def _confidence_grade(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    """
+    Grade each row by how many real data sources cover it.
+
+    Uses confidence_sources_raw (pre-fill coverage captured by
+    ingest_real_data._fill_missing) when available — AFTER the panel's
+    median-fill step, notna() would report full coverage everywhere.
+
+    Returns (grade, n_sources):
+      A — 6+ of 7 sources present   (fully corroborated)
+      B — 4-5 sources               (solid, minor gaps)
+      C — <4 sources                (score leans on proxies; treat with caution)
+    """
+    if "confidence_sources_raw" in df.columns:
+        present = df["confidence_sources_raw"].fillna(0).astype(int)
+    else:
+        present = pd.Series(0, index=df.index, dtype=int)
+        for col in _SOURCE_MARKERS.values():
+            if col in df.columns:
+                present += df[col].notna().astype(int)
+
+    grade = pd.Series("C", index=df.index)
+    grade[present >= 4] = "B"
+    grade[present >= 6] = "A"
+    return grade, present
 
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
