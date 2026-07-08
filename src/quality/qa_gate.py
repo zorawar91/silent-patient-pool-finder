@@ -267,6 +267,29 @@ ZCTA_CHECKS: list[Check] = (
        for c in _ZIP_DIM_COLS]
 )
 
+HCP_CHECKS: list[Check] = [
+    min_rows(10_000, remedy="Provider download truncated — check data.cms.gov paging, "
+             "or use the manual CSV fallback (see ingest_hcp_data.py header)."),
+    code_format("npi", 10, remedy="NPIs malformed — wrong column parsed."),
+    min_unique("npi", 10_000, remedy="Duplicate NPIs — paging fetched the same offset repeatedly."),
+    code_format("zip5", 5, remedy="Provider ZIPs malformed — float artifact or wrong column."),
+    value_range("hcp_priority_score", 0, 100),
+    min_std("hcp_priority_score", 3.0,
+            remedy="Score is flat — a component collapsed (check geo join match rate)."),
+    Check(
+        "ZIP→ZCTA geo match rate",
+        lambda df: "geo_percentile" in df.columns
+                   and (df["geo_percentile"] != 50.0).mean() > 0.50,
+        lambda df: (f"{(df['geo_percentile'] != 50.0).mean():.1%} of NPIs matched "
+                    f"to a real geography score (default-fill 50.0 excluded)"
+                    if "geo_percentile" in df.columns else "geo_percentile MISSING"),
+        remedy="Geography join failed — re-run ingest_zcta_data.py first.",
+    ),
+    max_null_share("panel_size", 0.02, remedy="Panel size missing — wrong column parsed."),
+    max_null_share("panel_diabetes_pct", 0.60, WARN,
+                   "Panel condition data sparse — burden component weakened."),
+]
+
 CROSSWALK_CHECKS: list[Check] = [
     min_rows(40_000, remedy="Crosswalk truncated — wrong column parsed or bad filter. "
              + RERUN_ZCTA),

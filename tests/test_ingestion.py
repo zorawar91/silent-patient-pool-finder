@@ -10,6 +10,11 @@ from datetime import date
 import pandas as pd
 import pytest
 
+# Legacy synthetic (Synthea) pipeline tests — superseded by the real-data
+# pipeline. Skip cleanly when its optional deps are absent instead of
+# breaking collection for the whole suite.
+pytest.importorskip("loguru", reason="legacy synthetic pipeline deps not installed")
+
 # Allow importing from src/ingestion without installing
 sys.path.insert(0, str(Path(__file__).parents[1] / "src" / "ingestion"))
 
