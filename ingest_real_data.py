@@ -110,6 +110,10 @@ def main():
     # No synthetic signals — use real-data proxies for all dimensions
     dim_scores = compute_all_dimensions(panel, orig_signals=None)
 
+    # QA gate — block the write if output is corrupt or silently degraded
+    from src.quality.qa_gate import run_gate, COUNTY_CHECKS
+    run_gate(dim_scores, COUNTY_CHECKS, name="county dimension scores").raise_on_failure()
+
     out_path = Path(SCORED_DIR) / "dimension_scores.parquet"
     dim_scores.to_parquet(out_path, index=False)
 

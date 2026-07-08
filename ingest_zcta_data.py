@@ -101,6 +101,14 @@ def main():
     centroids = _download_zcta_centroids()
 
     # Build + score
+    # QA gate on the crosswalk BEFORE scoring — catches the OID/'00nan' parser
+    # bug class at the source instead of 5 steps downstream
+    from src.quality.qa_gate import run_gate, CROSSWALK_CHECKS, ZCTA_CHECKS
+    if not crosswalk.empty:
+        run_gate(crosswalk, CROSSWALK_CHECKS, name="ZCTA→county crosswalk").raise_on_failure()
+    else:
+        log.warning("Crosswalk empty — county-derived ZIP dimensions will fail the output gate")
+
     log.info("\n[→] Building ZCTA panel and scoring 7 dimensions …")
     from src.features.zip_scorer import score_zctas
     zip_scores = score_zctas(
@@ -114,6 +122,9 @@ def main():
     if zip_scores.empty:
         log.error("ZIP scoring produced empty output — check logs above")
         sys.exit(1)
+
+    # QA gate on the final output — block the write if corrupt/degraded
+    run_gate(zip_scores, ZCTA_CHECKS, name="ZIP opportunity scores").raise_on_failure()
 
     out_path = Path(SCORED_DIR) / "zip_scores.parquet"
     zip_scores.to_parquet(out_path, index=False)
