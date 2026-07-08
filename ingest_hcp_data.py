@@ -141,22 +141,39 @@ def _load_providers() -> pd.DataFrame:
             df.to_parquet(cache, index=False)
             return df
 
-    url = _resolve_dataset_url()
-    if not url:
+    urls = _resolve_dataset_urls()
+    if not urls:
         return pd.DataFrame()
 
-    # data-api supports offset paging; 5,000 rows/request is the server cap
-    log.info(f"  Providers: paging {url[:80]} …")
+    # ── Strategy 1: direct file download (one stream ≫ 280 slow API pages) ───
+    if urls.get("download_url"):
+        df = _download_provider_file(urls["download_url"])
+        if not df.empty:
+            df.to_parquet(cache, index=False)
+            return df
+
+    # ── Strategy 2: paged data-api (slow — CSV endpoint often times out;
+    #    JSON endpoint is faster and cached server-side) ──────────────────────
+    api = urls.get("api_url")
+    if not api:
+        return pd.DataFrame()
+    json_api = api.replace("/data.csv", "/data")
+    log.info(f"  Providers: paging JSON API {json_api[:80]} …")
     frames, offset, size = [], 0, 5000
     while True:
-        try:
-            resp = requests.get(f"{url}?size={size}&offset={offset}", timeout=TIMEOUT)
-            resp.raise_for_status()
-        except Exception as e:
-            log.warning(f"    page offset={offset} failed: {e}")
-            break
-        chunk = pd.read_csv(io.StringIO(resp.text), low_memory=False)
-        if chunk.empty:
+        chunk = None
+        for attempt in (1, 2, 3):
+            try:
+                resp = requests.get(
+                    f"{json_api}?size={size}&offset={offset}", timeout=300)
+                resp.raise_for_status()
+                data = resp.json()
+                chunk = pd.DataFrame(data)
+                break
+            except Exception as e:
+                log.warning(f"    page offset={offset} attempt {attempt} failed: {e}")
+                time.sleep(5 * attempt)
+        if chunk is None or chunk.empty:
             break
         frames.append(_slim_provider_chunk(chunk))
         offset += size
@@ -170,9 +187,56 @@ def _load_providers() -> pd.DataFrame:
     return df
 
 
-def _resolve_dataset_url() -> str | None:
+def _download_provider_file(url: str) -> pd.DataFrame:
+    """Stream the full CSV (or zipped CSV) release file and parse in chunks."""
+    import tempfile, zipfile
+
+    log.info(f"  Providers: streaming direct download {url[:85]} …")
+    try:
+        with requests.get(url, timeout=TIMEOUT, stream=True) as resp:
+            resp.raise_for_status()
+            total = int(resp.headers.get("content-length", 0))
+            with tempfile.NamedTemporaryFile(suffix=Path(url).suffix or ".csv",
+                                             delete=False) as tmp:
+                done = 0
+                for part in resp.iter_content(chunk_size=8 * 1024 * 1024):
+                    tmp.write(part)
+                    done += len(part)
+                    if total and done % (200 * 1024 * 1024) < 8 * 1024 * 1024:
+                        log.info(f"    … {done/1e6:.0f} / {total/1e6:.0f} MB")
+                tmp_path = Path(tmp.name)
+        log.info(f"    downloaded {tmp_path.stat().st_size/1e6:.0f} MB")
+
+        if zipfile.is_zipfile(tmp_path):
+            with zipfile.ZipFile(tmp_path) as zf:
+                name = next((n for n in zf.namelist() if n.lower().endswith(".csv")), None)
+                if not name:
+                    return pd.DataFrame()
+                with zf.open(name) as fh:
+                    df = _parse_provider_stream(fh)
+        else:
+            df = _parse_provider_stream(tmp_path)
+        tmp_path.unlink(missing_ok=True)
+        log.info(f"  Providers: {len(df):,} targetable NPIs from direct file")
+        return df
+    except Exception as e:
+        log.warning(f"  Direct download failed: {e} — falling back to paged API")
+        return pd.DataFrame()
+
+
+def _parse_provider_stream(src) -> pd.DataFrame:
+    frames = [
+        _slim_provider_chunk(chunk)
+        for chunk in pd.read_csv(src, chunksize=200_000, low_memory=False,
+                                 encoding_errors="replace")
+    ]
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+
+def _resolve_dataset_urls() -> dict | None:
     """
-    Find the by-Provider dataset's data-api CSV URL from the CMS catalog.
+    Find the by-Provider dataset's URLs from the CMS catalog.
+    Returns {"api_url": …, "download_url": …} (either key may be absent).
 
     Two real-world traps handled here (both hit in production 2026-07):
       1. Title matching must be EXACT — a substring match on "by provider"
@@ -193,29 +257,47 @@ def _resolve_dataset_url() -> str | None:
         log.warning(f"  Catalog fetch failed: {e}")
         return None
 
-    candidates = []   # (dist_title, uuid) — dist titles carry the data year
+    def _fix_host(u: str) -> str:
+        """CMS catalog URLs sometimes carry a placeholder host — rebuild it."""
+        from urllib.parse import urlparse, urlunparse
+        p = urlparse(u)
+        if p.netloc in ("default", "", "localhost"):
+            p = p._replace(scheme="https", netloc="data.cms.gov")
+        return urlunparse(p)
+
+    api_candidates = []    # (dist_title, uuid)
+    file_candidates = []   # (dist_title, direct_url)
     for ds in catalog.get("dataset", []):
         title = str(ds.get("title", "")).strip().lower()
         # Exact dataset only — reject "…by provider and service" etc.
         if title != DATASET_TITLE:
             continue
         for dist in ds.get("distribution", []):
-            access = str(dist.get("accessURL", "") or dist.get("downloadURL", ""))
-            m = re.search(r"dataset/([0-9a-fA-F-]{36})", access)
+            dist_title = str(dist.get("title", "")) or title
+            access = str(dist.get("accessURL", "") or "")
+            download = str(dist.get("downloadURL", "") or "")
+            m = re.search(r"dataset/([0-9a-fA-F-]{36})", access or download)
             if m:
-                dist_title = str(dist.get("title", "")) or title
-                candidates.append((dist_title, m.group(1)))
+                api_candidates.append((dist_title, m.group(1)))
+            if download and ("csv" in download.lower() or "zip" in download.lower()):
+                file_candidates.append((dist_title, _fix_host(download)))
 
-    if not candidates:
+    if not api_candidates and not file_candidates:
         log.warning(f"  Dataset '{DATASET_TITLE}' not found in catalog "
-                    f"(or no data-api distribution)")
+                    f"(or no usable distribution)")
         return None
 
-    candidates.sort(reverse=True)   # latest year first (dist titles carry dates)
-    dist_title, uuid = candidates[0]
-    url = f"https://data.cms.gov/data-api/v1/dataset/{uuid}/data.csv"
-    log.info(f"  Dataset resolved: {dist_title[:70]} → {uuid}")
-    return url
+    api_candidates.sort(reverse=True)    # latest year first (titles carry dates)
+    file_candidates.sort(reverse=True)
+    out = {}
+    if api_candidates:
+        dist_title, uuid = api_candidates[0]
+        out["api_url"] = f"https://data.cms.gov/data-api/v1/dataset/{uuid}/data.csv"
+        log.info(f"  Dataset resolved: {dist_title[:70]} → {uuid}")
+    if file_candidates:
+        out["download_url"] = file_candidates[0][1]
+        log.info(f"  Direct file: {out['download_url'][:85]}")
+    return out
 
 
 def _slim_provider_chunk(chunk: pd.DataFrame) -> pd.DataFrame:

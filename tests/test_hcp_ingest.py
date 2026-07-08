@@ -28,7 +28,8 @@ MOCK_CATALOG = {
                 {"title": "Medicare Physician & Other Practitioners - by Provider : 2021-01-01",
                  "accessURL": "https://default/data-api/v1/dataset/aaaaaaaa-1111-2222-3333-444444444444/data"},
                 {"title": "Medicare Physician & Other Practitioners - by Provider : 2023-01-01",
-                 "accessURL": "https://default/data-api/v1/dataset/bbbbbbbb-5555-6666-7777-888888888888/data"},
+                 "accessURL": "https://default/data-api/v1/dataset/bbbbbbbb-5555-6666-7777-888888888888/data",
+                 "downloadURL": "https://default/sites/default/files/2025-01/MUP_PHY_Prov_2023.csv"},
             ],
         },
         {
@@ -51,10 +52,12 @@ def _mock_get(*a, **k):
 
 def test_resolves_exact_dataset_latest_year_real_host():
     with patch.object(ihd.requests, "get", _mock_get):
-        url = ihd._resolve_dataset_url()
-    # Correct dataset (NOT "and Service"), latest year, host rebuilt
-    assert url == ("https://data.cms.gov/data-api/v1/dataset/"
-                   "bbbbbbbb-5555-6666-7777-888888888888/data.csv")
+        urls = ihd._resolve_dataset_urls()
+    # Correct dataset (NOT "and Service"), latest year, hosts rebuilt
+    assert urls["api_url"] == ("https://data.cms.gov/data-api/v1/dataset/"
+                               "bbbbbbbb-5555-6666-7777-888888888888/data.csv")
+    assert urls["download_url"] == \
+        "https://data.cms.gov/sites/default/files/2025-01/MUP_PHY_Prov_2023.csv"
 
 
 def test_missing_dataset_returns_none():
@@ -62,6 +65,6 @@ def test_missing_dataset_returns_none():
         old = ihd.DATASET_TITLE
         ihd.DATASET_TITLE = "nonexistent dataset"
         try:
-            assert ihd._resolve_dataset_url() is None
+            assert ihd._resolve_dataset_urls() is None
         finally:
             ihd.DATASET_TITLE = old
