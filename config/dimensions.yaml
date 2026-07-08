@@ -37,7 +37,7 @@ dimensions:
     data_sources:
       - cdc_places           # LIVE — Diagnosed vs. estimated prevalence
       - census_acs           # LIVE — Uninsured rate, checkup rate proxies
-      - cms_ma_penetration   # LIVE — Medicare T2D diagnosed rate (GV PUF)
+      - cms_ma_penetration   # LIVE — Medicare T2D + HTN diagnosed rates (GV PUF)
       - cms_part_d           # PLANNED — County-level Rx fill counts (real treatment penetration)
       - cms_part_b           # PLANNED — Lab orders without follow-up Rx (diagnostic orphan signal)
     features:
@@ -83,7 +83,7 @@ dimensions:
     data_sources:
       - census_acs              # LIVE — Poverty, income, education, insurance, race/ethnicity
       - county_health_rankings  # LIVE — SDoH composite scores (RWJ Foundation)
-      - usda_food_atlas         # PLANNED — Food desert/food swamp designations by county
+      - usda_food_atlas         # LIVE — Food desert designations (PCT_LACCESS_POP15, ERS)
     features:
       - poverty_rate
       - food_desert_flag
@@ -150,7 +150,7 @@ dimensions:
     icon: "📈"
     data_sources:
       - census_acs           # LIVE — Demographic shift (aging, income trends)
-      - cdc_places           # LIVE — Current disease burden baseline
+      - cdc_places           # LIVE — Multi-year prevalence trend (2020→2022 BRFSS delta)
       - cms_part_d           # PLANNED — Rx trend year-over-year (treatment growth rate)
     features:
       - prevalence_trend_3yr     # Change in estimated prevalence 2020→2023

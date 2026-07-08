@@ -151,7 +151,13 @@ def _parse(raw_path: Path) -> pd.DataFrame:
 
 
 def _parse_long_format(raw: pd.DataFrame) -> pd.DataFrame:
-    """Parse the standard long-format CDC PLACES file (MeasureId/Data_Value rows)."""
+    """Parse the standard long-format CDC PLACES file (MeasureId/Data_Value rows).
+
+    Handles two CDC PLACES CSV variants:
+      Classic (2022):  has GeographicLevel column ("County" / "State" / "US")
+      Newer  (2023+):  no GeographicLevel; uses LocationID length instead
+                       (5-digit = county, 2-digit = state)
+    """
     # Normalize column names (sometimes lowercase in newer releases)
     col_map = {c: c for c in raw.columns}
     lower_cols = {c.lower(): c for c in raw.columns}
@@ -159,17 +165,40 @@ def _parse_long_format(raw: pd.DataFrame) -> pd.DataFrame:
     def col(name: str) -> str:
         return col_map.get(name) or lower_cols.get(name.lower()) or name
 
-    # Filter to county-level data with crude prevalence values
-    geo_col   = col("GeographicLevel")
     type_col  = col("DataValueTypeID")
     meas_col  = col("MeasureId")
     loc_col   = col("LocationID")
     val_col   = col("Data_Value")
 
-    raw = raw[raw[geo_col].str.strip().str.lower() == "county"].copy()
+    # ── Filter to county-level rows ──────────────────────────────────────────
+    geo_col = col("GeographicLevel")
+    if geo_col in raw.columns:
+        # Classic format: GeographicLevel == "County"
+        raw = raw[raw[geo_col].str.strip().str.lower() == "county"].copy()
+    elif loc_col in raw.columns:
+        # Newer format: LocationID holds the county FIPS code.
+        # IMPORTANT: pandas may parse "01001" as integer 1001 (drops leading zero).
+        # Fix: zero-pad to 5 chars first, then filter by valid US state FIPS prefix.
+        # State rows (e.g. "01" → "00001") get state-part "00" which is not valid.
+        _fips_padded = raw[loc_col].astype(str).str.strip().str.zfill(5)
+        _valid_states = {f"{i:02d}" for i in [
+            1,2,4,5,6,8,9,10,11,12,13,15,16,17,18,19,20,21,22,23,24,25,26,
+            27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,44,45,46,47,48,
+            49,50,51,53,54,55,56
+        ]}
+        raw = raw[_fips_padded.str[:2].isin(_valid_states)].copy()
+    else:
+        log.warning("CDC PLACES long format: no GeographicLevel or LocationID column found")
+        return pd.DataFrame()
 
     if type_col in raw.columns:
-        crude_mask = raw[type_col].str.strip().str.upper().isin(["CRDPRV", "CRUDE_PREV", "AGE-ADJUSTED"])
+        # CDC PLACES uses several abbreviations across releases:
+        #   Classic: "CRDPRV"   (6 chars)
+        #   2023+:   "CRDPREV"  (7 chars, "CrdPrev" uppercased)
+        #   Also accept age-adjusted and crude_prev variants
+        crude_mask = raw[type_col].str.strip().str.upper().isin([
+            "CRDPRV", "CRDPREV", "CRUDE_PREV", "AGE-ADJUSTED", "AGEADJPREV",
+        ])
         raw = raw[crude_mask | raw[type_col].isna()].copy()
 
     # Filter to measures we need

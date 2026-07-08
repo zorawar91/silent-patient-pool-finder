@@ -18,15 +18,17 @@ Type 2 Diabetes, Hypertension, and Hypothyroidism have large undiagnosed populat
 
 ---
 
-## Data Sources (5 real, publicly available)
+## Data Sources (7 real, publicly available)
 
 | Source | Provider | Coverage | Dimensions |
 |--------|----------|----------|------------|
-| PLACES County Health Data | CDC | 2,956 counties | Disease Burden, Diagnosis Gap |
+| PLACES County Health Data (2024) | CDC | 2,956 counties | Disease Burden, Diagnosis Gap |
+| PLACES County Health Data (2022) | CDC | 2,900+ counties | Trajectory (YoY trend) |
 | American Community Survey (5-year) | US Census Bureau | 3,222 counties | Social Determinants |
-| Medicare Advantage Penetration | CMS | 3,128 counties | Payer Landscape |
+| Geographic Variation PUF | CMS | 3,128 counties | Diagnosis Gap, Payer Landscape |
 | Health Professional Shortage Areas | HRSA | 3,233 counties | Access to Care |
 | County Health Rankings | Robert Wood Johnson Foundation | 3,152 counties | Access to Care, SDoH backup |
+| Food Environment Atlas | USDA ERS | 3,100+ counties | Social Determinants (food access) |
 
 All data is ingested at the aggregate county level. No individual patient records are used at any stage.
 
@@ -102,7 +104,7 @@ export CENSUS_API_KEY=your_key_here
 python3 ingest_real_data.py
 ```
 
-This downloads and caches all 5 data sources and scores all 3,144 US counties. Runtime: ~2 minutes on first run, ~5 seconds from cache.
+This downloads and caches all 7 data sources and scores all 3,144 US counties. Runtime: ~3–4 minutes on first run, ~5 seconds from cache.
 
 > **Note:** County Health Rankings requires a one-time manual download due to WAF restrictions.
 > Visit [countyhealthrankings.org → Health Data](https://www.countyhealthrankings.org/health-data/methodology-and-sources/data-documentation),
@@ -136,7 +138,7 @@ python3 ingest_real_data.py --db
 | M2 — Feature engineering | ✅ Complete |
 | M3 — ML scoring model | ✅ Complete |
 | M4 — Streamlit dashboard | ✅ Complete |
-| M5 — Real data integration (5 sources) | ✅ Complete |
+| M5 — Real data integration (7 sources) | ✅ Complete |
 | M6 — Validation & stakeholder documentation | 🔄 In progress |
 
 ---

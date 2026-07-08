@@ -150,34 +150,64 @@ def _dim_disease_burden(df: pd.DataFrame) -> pd.DataFrame:
 def _dim_diagnosis_gap(df: pd.DataFrame, signals: pd.DataFrame | None) -> pd.DataFrame:
     """
     How much of the disease burden is hidden from the healthcare system?
-    Core signal: treatment penetration gap + diagnostic orphan ratio.
+
+    Signal design (weights sum to 100):
+      T2D gap    35 — CDC PLACES prevalence × below-average CMS diagnosis rate
+      HTN gap    20 — CMS Medicare HTN rate relative to national county median
+                      (real CMS GV PUF signal; counties diagnosing fewer HTN
+                       cases than the national Medicare average have a larger gap)
+      Orphan     25 — diagnostic orphan proxy: SES disadvantage + low checkup
+      Checkup    10 — low annual checkup rate = patients not entering the system
+      Uninsured  10 — inability to afford diagnosis = hidden burden
+
+    All CMS signals use within-sample medians as the reference baseline so the
+    score reflects relative county performance, not absolute Medicare prevalence.
     """
     score = np.zeros(len(df))
 
-    # Treatment penetration gap — higher gap = higher score
+    # ── T2D treatment penetration gap (CMS GV PUF × CDC PLACES) ─────────────
+    # CDC PLACES diabetes_prevalence_pct = adults diagnosed with T2D (general pop)
+    # cms_t2d_diagnosed_rate = % Medicare benes with T2D Dx code (≥65 population)
+    # A county below the national Medicare median is catching FEWER T2D cases
+    # than its peers → the gap between true burden and detected burden is wider.
     if "cms_t2d_diagnosed_rate" in df.columns and "diabetes_prevalence_pct" in df.columns:
-        # In Medicare population, some T2D is already found —
-        # compare against estimated true prevalence from CDC PLACES
-        gap = (df["diabetes_prevalence_pct"] - df["cms_t2d_diagnosed_rate"] * 0.6).clip(lower=0)
-        score += 40 * _norm(gap)
+        cms_med = df["cms_t2d_diagnosed_rate"].median()
+        # Below-median counties have a detection deficit
+        cms_deficit = (cms_med - df["cms_t2d_diagnosed_rate"]).clip(lower=0)
+        # Amplify by CDC burden: high prevalence + detection deficit = larger gap
+        t2d_gap = df["diabetes_prevalence_pct"] * (1.0 + cms_deficit)
+        score += 35 * _norm(t2d_gap)
+    elif "diabetes_prevalence_pct" in df.columns:
+        # No CMS data — use CDC burden alone (scaled by national undiagnosed fraction)
+        score += 35 * _norm(df["diabetes_prevalence_pct"] * 0.231)
 
-    # Diagnostic orphan ratio (from existing pipeline signals)
+    # ── HTN diagnosis gap (CMS GV PUF real signal) ───────────────────────────
+    # Medicare HTN diagnosed rate nationally ~57-60%; counties below median are
+    # systematically failing to identify hypertension in their Medicare population.
+    # HTN is the most common undiagnosed condition (27% undiagnosed per AHA).
+    if "cms_htn_diagnosed_rate" in df.columns:
+        htn_med = df["cms_htn_diagnosed_rate"].median()
+        htn_deficit = (htn_med - df["cms_htn_diagnosed_rate"]).clip(lower=0)
+        score += 20 * _norm(htn_deficit)
+
+    # ── Diagnostic orphan proxy ───────────────────────────────────────────────
+    # Proxy: counties with high SES disadvantage AND low checkup rates have the
+    # highest diagnostic orphan ratio (lab ordered, no follow-up Rx).
     if signals is not None and "diagnostic_orphan_ratio" in signals.columns:
         t2d_sig = signals[signals["condition"] == "t2d"].groupby("county_fips")[
             "diagnostic_orphan_ratio"
         ].mean()
         orphan = df["county_fips"].map(t2d_sig).fillna(t2d_sig.median())
-        score += 30 * _norm(orphan)
+        score += 25 * _norm(orphan)
     elif "ses_disadvantage_index" in df.columns:
-        # Proxy: high SES disadvantage + low checkup = high orphan ratio
         checkup_inv = 1 - df.get("annual_checkup_pct", pd.Series(0.72, index=df.index))
-        score += 30 * _norm(0.5 * df["ses_disadvantage_index"] + 0.5 * checkup_inv)
+        score += 25 * _norm(0.5 * df["ses_disadvantage_index"] + 0.5 * checkup_inv)
 
-    # Low checkup rate signals patients not presenting for care
+    # ── Annual checkup rate (care-seeking behaviour) ──────────────────────────
     if "annual_checkup_pct" in df.columns:
-        score += 20 * _norm(1 - df["annual_checkup_pct"])
+        score += 10 * _norm(1 - df["annual_checkup_pct"])
 
-    # Uninsured rate (uninsured patients can't afford diagnosis)
+    # ── Uninsured rate (cost barrier to diagnosis) ────────────────────────────
     if "uninsured_rate" in df.columns:
         score += 10 * _norm(df["uninsured_rate"])
 
@@ -221,11 +251,19 @@ def _dim_social_determinants(df: pd.DataFrame) -> pd.DataFrame:
     """
     What structural factors are driving the diagnosis gap?
     High score = high SDoH burden = complex but important target.
+
+    Weights (sum = 100):
+      poverty_rate          25  — core economic hardship
+      ses_disadvantage_idx  25  — composite deprivation
+      racial_risk_index     20  — demographic disease-risk disparity
+      uninsured_rate        15  — insurance access barrier
+      food_desert_pct       10  — USDA Food Environment Atlas (real) or CHR proxy
+      hs_graduation_rate     5  — health literacy barrier
     """
     score = np.zeros(len(df))
 
     if "poverty_rate" in df.columns:
-        score += 30 * _norm(df["poverty_rate"])
+        score += 25 * _norm(df["poverty_rate"])
 
     if "ses_disadvantage_index" in df.columns:
         score += 25 * _norm(df["ses_disadvantage_index"])
@@ -236,9 +274,15 @@ def _dim_social_determinants(df: pd.DataFrame) -> pd.DataFrame:
     if "uninsured_rate" in df.columns:
         score += 15 * _norm(df["uninsured_rate"])
 
+    # Food desert: % population with low access to grocery stores
+    # Real: USDA Food Environment Atlas (PCT_LACCESS_POP15)
+    # Proxy: CHR food_insecurity_pct when USDA unavailable
+    if "food_desert_pct" in df.columns:
+        score += 10 * _norm(df["food_desert_pct"])
+
     # Low education = health literacy barrier
     if "hs_graduation_rate" in df.columns:
-        score += 10 * _norm(1 - df["hs_graduation_rate"])
+        score += 5 * _norm(1 - df["hs_graduation_rate"])
 
     df["dim_social_determinants"] = score.clip(0, 100)
     return df
@@ -321,25 +365,55 @@ def _dim_trajectory(df: pd.DataFrame) -> pd.DataFrame:
     """
     Is the opportunity growing or shrinking?
     High score = widening gap OR growing high-risk population = move now.
-    Currently uses demographic proxies; real version uses multi-year CMS/CDC trend data.
+
+    Signal design (weights sum to 100):
+      T2D prevalence trend  35  — CDC PLACES YoY delta (2020→2022 data)
+                                   Real: counties where diabetes burden increased
+                                   Proxy (if prior unavailable): aging + obesity
+      HTN prevalence trend  20  — CDC PLACES YoY delta for hypertension
+                                   Real: counties where HTN burden increased
+      Aging population      25  — median_age (future T2D/HTN incidence driver)
+      SDoH + rural          20  — high deprivation + rural = gap widening trend
+
+    CDC PLACES prior-year data covers the PLACES 2022 release (2020 BRFSS data).
+    Current covers the PLACES 2024 release (2022 BRFSS data).
+    Positive trend = prevalence growing = opportunity expanding.
     """
     score = np.zeros(len(df))
 
-    # Aging population = future T2D burden growing (T2D risk increases with age)
+    # ── T2D prevalence trend (real CDC PLACES YoY) ───────────────────────────
+    # Positive delta = diabetes burden grew between releases = gap widening
+    has_t2d_trend = "diabetes_trend" in df.columns and df["diabetes_trend"].notna().sum() > 100
+    if has_t2d_trend:
+        # Counties with growing T2D burden score higher on trajectory
+        score += 35 * _norm(df["diabetes_trend"].fillna(0))
+    else:
+        # Proxy: aging + obesity = future T2D incidence driver
+        if "obesity_rate_pct" in df.columns:
+            score += 35 * _norm(df["obesity_rate_pct"])
+
+    # ── HTN prevalence trend (real CDC PLACES YoY) ───────────────────────────
+    has_htn_trend = "htn_trend" in df.columns and df["htn_trend"].notna().sum() > 100
+    if has_htn_trend:
+        score += 20 * _norm(df["htn_trend"].fillna(0))
+    else:
+        # Proxy: high SES disadvantage → more untreated HTN progression
+        if "ses_disadvantage_index" in df.columns:
+            score += 20 * _norm(df["ses_disadvantage_index"])
+
+    # ── Aging population (future burden driver — always real from Census ACS) ─
     if "median_age" in df.columns:
-        score += 40 * _norm(df["median_age"])
+        score += 25 * _norm(df["median_age"])
 
-    # Obesity rate trend proxy — high current obesity = high future T2D incidence
-    if "obesity_rate_pct" in df.columns:
-        score += 30 * _norm(df["obesity_rate_pct"])
-
-    # Rural + high SDoH = gap likely widening (less investment, more need)
+    # ── Rural + SDoH (structural factors that make gaps widen over time) ──────
     if "ses_disadvantage_index" in df.columns and "is_rural" in df.columns:
         widening_proxy = (
             0.6 * df["ses_disadvantage_index"] +
             0.4 * df["is_rural"].astype(float)
         )
-        score += 30 * _norm(widening_proxy)
+        score += 20 * _norm(widening_proxy)
+    elif "ses_disadvantage_index" in df.columns:
+        score += 20 * _norm(df["ses_disadvantage_index"])
 
     df["dim_trajectory"] = score.clip(0, 100)
     return df

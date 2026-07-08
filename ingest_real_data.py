@@ -9,11 +9,13 @@ ROOT CAUSE FIXED:
   capped at 259.  v2 uses Census TIGER as the spine (3,144 US counties).
 
 Data sources:
-  1. Census TIGER national_county.txt  → county FIPS spine (3,143 counties)
+  1. Census TIGER national_county.txt  → county FIPS spine (3,144 counties)
   2. CDC PLACES 2024                   → disease burden (T2D, obesity, HTN, …)
-  3. Census ACS 5-year (2022)          → SDoH (poverty, income, uninsured, …)
-  4. CMS Geographic Variation PUF     → Medicare T2D diagnosed rate + MA penetration
-  5. County Health Rankings 2024      → access to care + SDoH backup
+  3. CDC PLACES 2022 (prior release)   → prevalence trend signal (trajectory)
+  4. Census ACS 5-year (2022)          → SDoH (poverty, income, uninsured, …)
+  5. CMS Geographic Variation PUF     → Medicare T2D + HTN diagnosed rates + MA penetration
+  6. County Health Rankings 2024      → access to care + SDoH backup
+  7. USDA Food Environment Atlas       → food desert % (social determinants)
 
 Run:
   python3 ingest_real_data.py
@@ -72,29 +74,37 @@ def main():
     Path(SCORED_DIR).mkdir(parents=True, exist_ok=True)
 
     # 1. County spine ──────────────────────────────────────────────────────────
-    log.info("\n[1/6] Census TIGER county list …")
+    log.info("\n[1/8] Census TIGER county list …")
     counties = _download_census_counties()
     log.info(f"      Spine: {len(counties):,} counties")
 
-    # 2. CDC PLACES — disease burden ──────────────────────────────────────────
-    log.info("\n[2/6] CDC PLACES (disease burden) …")
+    # 2. CDC PLACES — disease burden (current year) ───────────────────────────
+    log.info("\n[2/8] CDC PLACES 2024 (disease burden — current) …")
     cdc = _download_cdc_places()
 
-    # 3. Census ACS — SDoH ────────────────────────────────────────────────────
-    log.info("\n[3/6] Census ACS 5-year estimates (social determinants) …")
+    # 3. CDC PLACES — prior year (for trajectory trend) ───────────────────────
+    log.info("\n[3/8] CDC PLACES prior release (trajectory trend signal) …")
+    cdc_prior = _download_cdc_places_prior()
+
+    # 4. Census ACS — SDoH ────────────────────────────────────────────────────
+    log.info("\n[4/8] Census ACS 5-year estimates (social determinants) …")
     acs = _download_census_acs()
 
-    # 4. CMS GV PUF — diagnosis gap + MA penetration ─────────────────────────
-    log.info("\n[4/6] CMS Geographic Variation PUF (Medicare rates) …")
+    # 5. CMS GV PUF — diagnosis gap + MA penetration ─────────────────────────
+    log.info("\n[5/8] CMS Geographic Variation PUF (Medicare rates) …")
     cms = _download_cms_gv_puf()
 
-    # 5. County Health Rankings — access + SDoH backup ────────────────────────
-    log.info("\n[5/6] County Health Rankings 2024 (access / SDoH backup) …")
+    # 6. County Health Rankings — access + SDoH backup ────────────────────────
+    log.info("\n[6/8] County Health Rankings 2024 (access / SDoH backup) …")
     chr_df = _download_county_health_rankings()
 
-    # 6. Build panel + score ──────────────────────────────────────────────────
-    log.info("\n[6/6] Building merged panel and scoring 7 dimensions …")
-    panel = _build_panel(counties, cdc, acs, cms, chr_df)
+    # 7. USDA Food Environment Atlas — food desert signal ─────────────────────
+    log.info("\n[7/8] USDA Food Environment Atlas (food access / SDoH) …")
+    usda = _download_usda_food_atlas()
+
+    # 8. Build panel + score ──────────────────────────────────────────────────
+    log.info("\n[8/8] Building merged panel and scoring 7 dimensions …")
+    panel = _build_panel(counties, cdc, acs, cms, chr_df, usda, cdc_prior)
 
     from src.features.dimension_scorer import compute_all_dimensions
     # No synthetic signals — use real-data proxies for all dimensions
@@ -118,7 +128,7 @@ def main():
     log.info(f"  Emerging (40–55):  {emerging:,}")
     log.info(f"  Developing (<40):  {developing:,}")
     log.info(f"  Output:            {out_path}")
-    log.info("  NOTE: Priority threshold = 55 (5 real sources; max observable score ~60-62)")
+    log.info("  NOTE: Priority threshold = 55 (7 real sources; max observable score ~60-65)")
     log.info("=" * 62)
 
     top10 = dim_scores.nlargest(10, "opportunity_score")[
@@ -127,7 +137,7 @@ def main():
     ]
     log.info(f"\nTop 10 Opportunity Counties:\n{top10.to_string(index=False)}")
 
-    _log_provenance(cdc, acs, cms, chr_df)
+    _log_provenance(cdc, cdc_prior, acs, cms, chr_df, usda)
     log.info("\nDashboard ready → python3 -m streamlit run src/output/dashboard.py")
 
 
@@ -765,6 +775,221 @@ def _parse_chr(df: pd.DataFrame) -> pd.DataFrame:
     return result.reset_index(drop=True)
 
 
+def _download_cdc_places_prior() -> pd.DataFrame:
+    """
+    CDC PLACES prior-year release — used to compute disease prevalence trend.
+    Downloads an earlier PLACES release (~2 years prior) and returns the
+    same key measures with `_prior` suffix for trend calculation.
+
+    Trajectory signal = current_release - prior_release (positive = growing burden).
+    Current: PLACES 2024 (2022 data).  Prior: PLACES 2022 (2020 data).
+    """
+    cache = Path(OPEN_DIR) / "cdc_places_prior.parquet"
+    if cache.exists():
+        df = pd.read_parquet(cache)
+        log.info(f"  CDC PLACES (prior): {len(df):,} counties from cache")
+        return df
+
+    # PLACES 2022 release (GIS wide format) — 2020 BRFSS data
+    # PLACES 2023 release (long format) — 2021 BRFSS data (fallback)
+    urls = [
+        "https://data.cdc.gov/api/views/i46a-9kgh/rows.csv?accessType=DOWNLOAD",  # 2022 GIS
+        "https://data.cdc.gov/api/views/swc5-untb/rows.csv?accessType=DOWNLOAD",  # 2023 long
+    ]
+
+    for url in urls:
+        try:
+            log.info(f"  CDC PLACES (prior): trying {url[:70]} …")
+            resp = requests.get(url, timeout=TIMEOUT, stream=True)
+            resp.raise_for_status()
+            raw_path = Path(OPEN_DIR) / "_cdc_places_prior_raw.csv"
+            with open(raw_path, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=1 << 20):
+                    f.write(chunk)
+            size_mb = raw_path.stat().st_size / 1e6
+            log.info(f"    Downloaded {size_mb:.1f} MB")
+
+            from src.ingestion.open_data.cdc_places import _parse
+            df_raw = _parse(raw_path)
+            raw_path.unlink(missing_ok=True)  # clean up temp file
+
+            if df_raw.empty or len(df_raw) < 500:
+                log.warning("    Parsed too few rows, trying next URL …")
+                continue
+
+            # Rename to `_prior` suffix for trend calculation
+            rename = {
+                "diabetes_prevalence_pct":      "diabetes_prev_prior",
+                "hypertension_prevalence_pct":  "htn_prev_prior",
+                "obesity_rate_pct":             "obesity_prev_prior",
+            }
+            result = df_raw[["county_fips"]].copy()
+            for src, dst in rename.items():
+                if src in df_raw.columns:
+                    result[dst] = df_raw[src]
+
+            result = result.dropna(subset=list(rename.values()), how="all")
+            result.to_parquet(cache, index=False)
+            log.info(
+                f"  CDC PLACES (prior): {len(result):,} counties | "
+                f"diabetes avg {result['diabetes_prev_prior'].mean()*100:.1f}%"
+            )
+            return result
+        except Exception as e:
+            log.warning(f"    Failed: {e}")
+
+    log.warning("  CDC PLACES (prior): unavailable — trajectory will use demographic proxies only")
+    return pd.DataFrame()
+
+
+def _download_usda_food_atlas() -> pd.DataFrame:
+    """
+    USDA Food Environment Atlas — county-level food access data.
+    Provides: food_desert_pct (% population with low access to grocery stores).
+    Source: USDA Economic Research Service (ERS).
+    Sheet: ACCESS → PCT_LACCESS_POP15 (% population, low food access, 2015).
+
+    Manual fallback: download FoodEnvironmentAtlas.xls from
+    https://www.ers.usda.gov/data-products/food-environment-atlas/
+    and save to data/open/FoodEnvironmentAtlas.xls
+    """
+    cache = Path(OPEN_DIR) / "usda_food_atlas.parquet"
+    if cache.exists():
+        df = pd.read_parquet(cache)
+        log.info(f"  USDA Food Atlas: {len(df):,} counties from cache")
+        return df
+
+    urls = [
+        # Current XLSX (updated 2025-07-30) — USDA moved to /media/ path
+        "https://www.ers.usda.gov/media/5569/food-environment-atlas-data-download.xlsx?v=26424",
+        # 2020 archive (XLS) — stable fallback with ACCESS sheet + PCT_LACCESS_POP15
+        "https://www.ers.usda.gov/media/5558/2020-food-environment-atlas-data-download.xls?v=33909",
+        # Legacy /webdocs/ paths (kept for reference; 404 as of mid-2025)
+        # "https://www.ers.usda.gov/webdocs/DataFiles/50048/FoodEnvironmentAtlas.xls",
+    ]
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+    }
+
+    for url in urls:
+        try:
+            log.info(f"  USDA Food Atlas: trying {url[:70]} …")
+            resp = requests.get(url, timeout=TIMEOUT, headers=headers)
+            resp.raise_for_status()
+            if len(resp.content) < 10_000:
+                log.warning("    Response too small, skipping")
+                continue
+            raw = _read_usda_excel(io.BytesIO(resp.content))
+            result = _parse_usda_food_atlas(raw)
+            if not result.empty and len(result) > 500:
+                result.to_parquet(cache, index=False)
+                avg_pct = result["food_desert_pct"].mean() * 100
+                log.info(
+                    f"  USDA Food Atlas: {len(result):,} counties | "
+                    f"food_desert_pct avg {avg_pct:.1f}%"
+                )
+                return result
+            log.warning(f"    Parsed only {len(result)} rows, trying next URL …")
+        except Exception as e:
+            log.warning(f"    Failed: {e}")
+
+    # Try manual local download
+    for local_name in ["FoodEnvironmentAtlas.xlsx", "FoodEnvironmentAtlas.xls",
+                        "food-environment-atlas-data-download.xlsx"]:
+        local = Path(OPEN_DIR) / local_name
+        if not local.exists():
+            continue
+        try:
+            raw = _read_usda_excel(local)
+            result = _parse_usda_food_atlas(raw)
+            if not result.empty:
+                result.to_parquet(cache, index=False)
+                log.info(f"  USDA Food Atlas: {len(result):,} counties from local file")
+                return result
+        except Exception as e:
+            log.warning(f"    Local file parse failed: {e}")
+
+    log.warning(
+        "  USDA Food Atlas: unavailable — social_determinants will use CHR food_insecurity as proxy.\n"
+        "  To activate: download FoodEnvironmentAtlas.xls from\n"
+        "    https://www.ers.usda.gov/data-products/food-environment-atlas/\n"
+        "  and save to data/open/FoodEnvironmentAtlas.xls, then re-run."
+    )
+    return pd.DataFrame()
+
+
+def _read_usda_excel(source) -> pd.DataFrame:
+    """
+    Read the USDA Food Environment Atlas Excel file, auto-discovering the
+    correct sheet. Tries 'ACCESS' first, then any sheet containing LACCESS data.
+    The 2025 current version is XLSX; 2020 archive is XLS — both handled.
+    """
+    xl = pd.ExcelFile(source)
+    sheet_names = xl.sheet_names
+    log.info(f"    USDA Excel sheets: {sheet_names[:8]}")
+
+    # Try ACCESS sheet first (standard location in all archive versions)
+    for candidate in ["ACCESS", "Access", "access"]:
+        if candidate in sheet_names:
+            df = xl.parse(candidate)
+            if any("LACCESS" in str(c).upper() for c in df.columns):
+                return df
+
+    # Fall back: search all sheets for LACCESS column
+    for sheet in sheet_names:
+        try:
+            df = xl.parse(sheet)
+            if any("LACCESS" in str(c).upper() for c in df.columns):
+                log.info(f"    Found LACCESS data in sheet: {sheet}")
+                return df
+        except Exception:
+            continue
+
+    # Last resort: return first sheet (caller will handle empty result)
+    log.warning("    No sheet with LACCESS columns found — returning first sheet")
+    return xl.parse(sheet_names[0])
+
+
+def _parse_usda_food_atlas(df: pd.DataFrame) -> pd.DataFrame:
+    """Parse USDA Food Environment Atlas ACCESS sheet into county-level rows."""
+    df = df.copy()
+    df.columns = df.columns.str.strip()
+
+    result = pd.DataFrame()
+
+    # FIPS column — stored as int (e.g. 1001) or string; zfill to 5 digits
+    for col in df.columns:
+        if col.upper() == "FIPS":
+            result["county_fips"] = (
+                df[col].astype(str).str.strip().str.split(".").str[0].str.zfill(5)
+            )
+            break
+
+    if "county_fips" not in result.columns or result.empty:
+        return pd.DataFrame()
+
+    # % population with low access to grocery stores (food desert proxy)
+    # Prefer most-recent year available
+    for pct_col in ["PCT_LACCESS_POP15", "PCT_LACCESS_POP10", "PCT_LACCESS_POP"]:
+        if pct_col in df.columns:
+            vals = pd.to_numeric(df[pct_col], errors="coerce")
+            # ERS stores as 0-100 percentage
+            if vals.median(skipna=True) > 1.5:
+                vals = vals / 100.0
+            result["food_desert_pct"] = vals.clip(0, 1)
+            break
+
+    if "food_desert_pct" not in result.columns:
+        return pd.DataFrame()
+
+    result = result[result["county_fips"].str.match(r"^\d{5}$", na=False)]
+    result = result[result["county_fips"].str[:2].isin(US_STATE_FIPS)]
+    return result.drop_duplicates("county_fips").reset_index(drop=True)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # PANEL BUILDER
 # ─────────────────────────────────────────────────────────────────────────────
@@ -775,6 +1000,8 @@ def _build_panel(
     acs: pd.DataFrame,
     cms: pd.DataFrame,
     chr_df: pd.DataFrame,
+    usda: pd.DataFrame,
+    cdc_prior: pd.DataFrame,
 ) -> pd.DataFrame:
     """
     Merge all sources onto the Census TIGER county spine.
@@ -802,10 +1029,12 @@ def _build_panel(
             n_filled = panel[check_col].notna().sum()
             log.info(f"  After {name}: {n_filled:,}/{n_base:,} counties have {check_col}")
 
-    _merge(cdc,    "CDC PLACES",  "diabetes_prevalence_pct")
-    _merge(acs,    "Census ACS",  "poverty_rate")
-    _merge(cms,    "CMS GV PUF",  "cms_t2d_diagnosed_rate")
-    _merge(chr_df, "CHR",         "chr_poverty_pct")
+    _merge(cdc,       "CDC PLACES",         "diabetes_prevalence_pct")
+    _merge(cdc_prior, "CDC PLACES (prior)", "diabetes_prev_prior")
+    _merge(acs,       "Census ACS",         "poverty_rate")
+    _merge(cms,       "CMS GV PUF",         "cms_t2d_diagnosed_rate")
+    _merge(chr_df,    "CHR",                "chr_poverty_pct")
+    _merge(usda,      "USDA Food Atlas",    "food_desert_pct")
 
     # Try HRSA if available (adds hpsa_flag, fqhc_present)
     try:
@@ -893,6 +1122,34 @@ def _derive_features(df: pd.DataFrame) -> pd.DataFrame:
     # Median income is in dollars — no scaling needed
     if "median_household_income" not in df.columns and "chr_median_income" in df.columns:
         df["median_household_income"] = pd.to_numeric(df["chr_median_income"], errors="coerce")
+
+    # ── Prevalence trend (multi-year CDC PLACES delta) ───────────────────────
+    # diabetes_trend > 0 = burden growing (gap likely widening)
+    # diabetes_trend < 0 = burden shrinking (gap may be narrowing)
+    if "diabetes_prev_prior" in df.columns and "diabetes_prevalence_pct" in df.columns:
+        df["diabetes_trend"] = (
+            df["diabetes_prevalence_pct"] - df["diabetes_prev_prior"]
+        ).clip(-0.05, 0.05)  # cap extreme outliers (data error guard)
+    else:
+        df["diabetes_trend"] = np.nan  # falls back to demographic proxy in scorer
+
+    if "htn_prev_prior" in df.columns and "hypertension_prevalence_pct" in df.columns:
+        df["htn_trend"] = (
+            df["hypertension_prevalence_pct"] - df["htn_prev_prior"]
+        ).clip(-0.10, 0.10)
+    else:
+        df["htn_trend"] = np.nan
+
+    # ── Food desert (food access barrier) ────────────────────────────────────
+    if "food_desert_pct" not in df.columns:
+        if "chr_food_insecurity_pct" in df.columns:
+            # CHR food insecurity is a reasonable SDoH proxy when USDA unavailable
+            vals = pd.to_numeric(df["chr_food_insecurity_pct"], errors="coerce")
+            if vals.median(skipna=True) > 1.5:
+                vals = vals / 100.0
+            df["food_desert_pct"] = vals.clip(0, 1)
+        else:
+            df["food_desert_pct"] = _DEFAULTS["food_desert_pct"]
 
     # ── checkup rate: no direct backup; use national avg if missing ───────────
     if "annual_checkup_pct" not in df.columns:
@@ -987,13 +1244,15 @@ def _norm01(s: pd.Series) -> pd.Series:
     return (s - mn) / (mx - mn)
 
 
-def _log_provenance(cdc, acs, cms, chr_df):
+def _log_provenance(cdc, cdc_prior, acs, cms, chr_df, usda):
     ok = lambda df: "✅ REAL" if not df.empty else "⚠️  synthetic"
     log.info(
         "\nData provenance:"
-        f"\n  Disease burden:      {ok(cdc)} (CDC PLACES)"
+        f"\n  Disease burden:      {ok(cdc)} (CDC PLACES 2024)"
+        f"\n  Trajectory trend:    {ok(cdc_prior)} (CDC PLACES 2022 prior release)"
         f"\n  Social determinants: {ok(acs)} (Census ACS)"
-        f"\n  Medicare T2D rate:   {ok(cms)} (CMS Geographic Variation PUF)"
+        f"\n  Food desert signal:  {ok(usda)} (USDA Food Environment Atlas)"
+        f"\n  Medicare T2D/HTN:    {ok(cms)} (CMS Geographic Variation PUF)"
         f"\n  MA penetration:      {ok(cms)} (CMS Geographic Variation PUF)"
         f"\n  Access/SDoH backup:  {ok(chr_df)} (County Health Rankings)"
     )
@@ -1030,6 +1289,7 @@ _DEFAULTS = {
     "hpsa_flag":                   0,
     "fqhc_count":                  1,
     "fqhc_present":                1,
+    "food_desert_pct":             0.195,  # USDA ERS: ~19.5% US pop has low food access
 }
 
 
