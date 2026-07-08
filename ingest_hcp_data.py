@@ -171,7 +171,19 @@ def _load_providers() -> pd.DataFrame:
 
 
 def _resolve_dataset_url() -> str | None:
-    """Find the by-Provider dataset's data-api CSV URL from the CMS catalog."""
+    """
+    Find the by-Provider dataset's data-api CSV URL from the CMS catalog.
+
+    Two real-world traps handled here (both hit in production 2026-07):
+      1. Title matching must be EXACT — a substring match on "by provider"
+         also matches "…by Provider and Service" (a different, per-service
+         dataset without panel condition columns).
+      2. CMS catalog distribution URLs sometimes carry a placeholder host
+         ("https://default/data-api/…") — never trust the host; extract the
+         dataset UUID and rebuild the URL against data.cms.gov.
+    """
+    import re
+
     try:
         log.info("  Resolving dataset UUID from data.cms.gov catalog …")
         resp = requests.get(CATALOG_URL, timeout=TIMEOUT)
@@ -181,23 +193,29 @@ def _resolve_dataset_url() -> str | None:
         log.warning(f"  Catalog fetch failed: {e}")
         return None
 
-    candidates = []
+    candidates = []   # (dist_title, uuid) — dist titles carry the data year
     for ds in catalog.get("dataset", []):
-        title = str(ds.get("title", "")).lower()
-        if DATASET_TITLE in title:
-            for dist in ds.get("distribution", []):
-                access = str(dist.get("accessURL", "")) or str(dist.get("downloadURL", ""))
-                if "data-api" in access and access.endswith("/data"):
-                    # prefer latest year (titles carry the year)
-                    candidates.append((title, access + ".csv"))
-                elif "data-api" in access and "/data.csv" in access:
-                    candidates.append((title, access))
+        title = str(ds.get("title", "")).strip().lower()
+        # Exact dataset only — reject "…by provider and service" etc.
+        if title != DATASET_TITLE:
+            continue
+        for dist in ds.get("distribution", []):
+            access = str(dist.get("accessURL", "") or dist.get("downloadURL", ""))
+            m = re.search(r"dataset/([0-9a-fA-F-]{36})", access)
+            if m:
+                dist_title = str(dist.get("title", "")) or title
+                candidates.append((dist_title, m.group(1)))
+
     if not candidates:
-        log.warning("  No data-api distribution found in catalog")
+        log.warning(f"  Dataset '{DATASET_TITLE}' not found in catalog "
+                    f"(or no data-api distribution)")
         return None
-    candidates.sort(reverse=True)   # latest year first (title sort)
-    log.info(f"  Dataset resolved: {candidates[0][0][:70]}")
-    return candidates[0][1]
+
+    candidates.sort(reverse=True)   # latest year first (dist titles carry dates)
+    dist_title, uuid = candidates[0]
+    url = f"https://data.cms.gov/data-api/v1/dataset/{uuid}/data.csv"
+    log.info(f"  Dataset resolved: {dist_title[:70]} → {uuid}")
+    return url
 
 
 def _slim_provider_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
