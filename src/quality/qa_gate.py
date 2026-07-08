@@ -224,6 +224,21 @@ COUNTY_CHECKS: list[Check] = (
         # Coverage of key raw signals (WARN — degraded but usable)
         max_null_share("diabetes_prevalence_pct", 0.10, WARN,
                        "CDC PLACES coverage degraded — check download."),
+        # Post-fill this column is never null — gate on TRUE pre-fill coverage
+        # instead (confidence_sources_raw). CMS once covered only 236 counties
+        # because '1,234'/'12.3%' strings coerced to NaN; that must WARN loudly.
+        Check(
+            "CMS true coverage",
+            lambda df: ("confidence_sources_raw" not in df.columns
+                        or (df["confidence_sources_raw"] >= 4).mean() > 0.85),
+            lambda df: ("no pre-fill coverage column (older parquet)"
+                        if "confidence_sources_raw" not in df.columns else
+                        f"{(df['confidence_sources_raw'] >= 4).mean():.1%} of counties "
+                        f"have ≥4 real sources pre-fill"),
+            WARN,
+            "A source collapsed — check CMS/CHR/USDA download logs; "
+            "delete the failing cache in data/open and re-run.",
+        ),
         max_null_share("ma_penetration_rate", 0.15, WARN,
                        "CMS MA data degraded — payer dimension is weakened."),
         max_null_share("poverty_rate", 0.10, WARN,

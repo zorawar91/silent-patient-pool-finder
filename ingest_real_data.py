@@ -554,7 +554,7 @@ def _parse_cms_gv_puf(df: pd.DataFrame) -> pd.DataFrame:
     def _extract(df_reset, candidates):
         for c in candidates:
             if c in df_reset.columns:
-                vals = pd.to_numeric(df_reset[c], errors="coerce")
+                vals = _to_num(df_reset[c])   # handles '1,234', '12.3%', '*'
                 if vals.median() > 1:
                     vals = vals / 100.0
                 return vals.clip(0, 1)
@@ -567,7 +567,7 @@ def _parse_cms_gv_puf(df: pd.DataFrame) -> pd.DataFrame:
 
     for src in ["tot_benes","bene_cnt","tot_mdcr_benes"]:
         if src in df_r.columns:
-            result["total_medicare_beneficiaries"] = pd.to_numeric(df_r[src], errors="coerce")
+            result["total_medicare_beneficiaries"] = _to_num(df_r[src])
             break
 
     result = result[result["county_fips"].str.match(r"^\d{5}$", na=False)]
@@ -605,7 +605,12 @@ def _download_cms_ma_penetration_report() -> pd.DataFrame:
             result = pd.DataFrame()
             for fips_col in ["fips_code", "county_fips", "ssa_code", "fips"]:
                 if fips_col in raw.columns:
-                    result["county_fips"] = raw[fips_col].astype(str).str.zfill(5)
+                    # Strip float artifacts ('1001.0') before zfill — otherwise
+                    # the code gets the WRONG state prefix and passes the filter
+                    result["county_fips"] = (
+                        raw[fips_col].astype(str).str.strip()
+                        .str.replace(r"\.0$", "", regex=True).str.zfill(5)
+                    )
                     break
             if "county_fips" not in result.columns:
                 continue
@@ -613,7 +618,9 @@ def _download_cms_ma_penetration_report() -> pd.DataFrame:
             for ma_col in ["penetration_rate", "ma_penetration_rate", "ma_pct",
                            "pct_ma", "total_ma_plan_enrollment"]:
                 if ma_col in raw.columns:
-                    vals = pd.to_numeric(raw[ma_col], errors="coerce")
+                    # _to_num handles '12.34%', '1,234', '*' suppression —
+                    # naive to_numeric here once dropped coverage to 236 counties
+                    vals = _to_num(raw[ma_col])
                     if vals.median() > 1:
                         vals = vals / 100.0
                     result["ma_penetration_rate"] = vals.clip(0, 1)
@@ -625,8 +632,8 @@ def _download_cms_ma_penetration_report() -> pd.DataFrame:
                 elig_col   = next((c for c in raw.columns if "elig" in c), None)
                 if enroll_col and elig_col:
                     result["ma_penetration_rate"] = (
-                        pd.to_numeric(raw[enroll_col], errors="coerce") /
-                        pd.to_numeric(raw[elig_col], errors="coerce").clip(lower=1)
+                        _to_num(raw[enroll_col]) /
+                        _to_num(raw[elig_col]).clip(lower=1)
                     ).clip(0, 1)
 
             result = result.dropna(subset=["county_fips"])
@@ -1251,6 +1258,27 @@ def _fill_missing(df: pd.DataFrame) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 # UTILITIES
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _to_num(s: pd.Series) -> pd.Series:
+    """
+    Robust numeric parse for government CSV columns.
+
+    CMS/Census files format numbers as '1,234' (thousands commas), '12.34%',
+    ' 12.3 ' (padding), '*' / '.' / '' (suppression markers). Naive
+    pd.to_numeric coerces ALL of those to NaN — which once silently reduced
+    CMS MA coverage to 236 tiny comma-free counties out of 3,128.
+    """
+    cleaned = (
+        s.astype(str)
+         .str.strip()
+         .str.replace(",", "", regex=False)
+         .str.replace("%", "", regex=False)
+         .str.replace("$", "", regex=False)
+    )
+    cleaned = cleaned.replace({"*": None, ".": None, "": None, "nan": None,
+                               "N/A": None, "NA": None, "--": None})
+    return pd.to_numeric(cleaned, errors="coerce")
+
 
 def _norm01(s: pd.Series) -> pd.Series:
     s = pd.to_numeric(s, errors="coerce")
