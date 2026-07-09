@@ -465,6 +465,50 @@ def _recommend_intervention(row: pd.Series) -> str:
     return "Pharmacy-Based Screening"
 
 
+# ── Weight Sensitivity ────────────────────────────────────────────────────────
+
+DIM_ORDER = ["disease_burden", "diagnosis_gap", "access_to_care",
+             "social_determinants", "payer_landscape",
+             "commercial_readiness", "trajectory"]
+
+
+def recompute_composite(df: pd.DataFrame, weights: dict) -> pd.Series:
+    """
+    Recompute the composite opportunity score from existing dim_* columns
+    under a custom weight set. Weights are normalised to sum to 1, so the
+    caller can pass any non-negative numbers (e.g. raw slider values).
+    """
+    total = sum(max(float(weights.get(k, 0.0)), 0.0) for k in DIM_ORDER)
+    if total <= 0:
+        raise ValueError("At least one weight must be positive")
+    score = pd.Series(0.0, index=df.index)
+    for k in DIM_ORDER:
+        w = max(float(weights.get(k, 0.0)), 0.0) / total
+        col = f"dim_{k}"
+        if col in df.columns:
+            score = score + w * df[col].fillna(df[col].median())
+    return score.clip(0, 100)
+
+
+def rank_stability(base: pd.Series, custom: pd.Series, top_n: int = 50) -> dict:
+    """
+    How much does the ranking move when weights change?
+
+    Returns:
+      spearman     — rank correlation across all rows (1.0 = identical order)
+      top_overlap  — share of the default top-N still in the custom top-N
+      max_jump     — largest absolute rank change among default top-N rows
+    """
+    r_base = base.rank(ascending=False)
+    r_cust = custom.rank(ascending=False)
+    spearman = float(base.corr(custom, method="spearman"))
+    top_base = set(r_base.nsmallest(top_n).index)
+    top_cust = set(r_cust.nsmallest(top_n).index)
+    overlap = len(top_base & top_cust) / max(top_n, 1)
+    max_jump = int((r_cust - r_base).loc[list(top_base)].abs().max()) if top_base else 0
+    return {"spearman": spearman, "top_overlap": overlap, "max_jump": max_jump}
+
+
 # ── Confidence Grade ──────────────────────────────────────────────────────────
 
 # One representative column per real data source. A county's confidence grade

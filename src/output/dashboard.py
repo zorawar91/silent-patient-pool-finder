@@ -1232,6 +1232,106 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
     )
     st.markdown(html, unsafe_allow_html=True)
 
+    _render_weight_sensitivity(scores)
+
+
+# ── Weight Sensitivity (robustness the buyer can touch) ──────────────────────
+_DEFAULT_WEIGHTS = {
+    "disease_burden": 20, "diagnosis_gap": 25, "access_to_care": 15,
+    "social_determinants": 15, "payer_landscape": 10,
+    "commercial_readiness": 10, "trajectory": 5,
+}
+
+
+def _render_weight_sensitivity(scores: pd.DataFrame):
+    """Let an analyst move the 7 dimension weights and watch rankings hold."""
+    from src.features.dimension_scorer import recompute_composite, rank_stability
+
+    st.markdown('<div class="sec-head" style="margin-top:1.4rem;">Weight Sensitivity</div>',
+                unsafe_allow_html=True)
+    st.markdown(f"""<div class="sec-sub">Skeptical of the default weights? Move them.
+      Weights are re-normalised to 100%, the composite is recomputed live, and the
+      stability metrics show how little the ranking actually depends on any single
+      weighting choice.</div>""", unsafe_allow_html=True)
+
+    df = _ensure_dims(scores)
+    dim_cols_present = [f"dim_{k}" for k in _DEFAULT_WEIGHTS if f"dim_{k}" in df.columns]
+    if len(dim_cols_present) < 7:
+        st.info("Dimension columns unavailable — run ingest_real_data.py first.")
+        return
+
+    with st.expander("🎛️ Adjust dimension weights", expanded=False):
+        cols = st.columns(4)
+        weights = {}
+        for i, (k, default) in enumerate(_DEFAULT_WEIGHTS.items()):
+            with cols[i % 4]:
+                weights[k] = st.slider(
+                    DIM_LABELS[k], 0, 40, default, step=5,
+                    key=f"wsens_{k}",
+                )
+        total = sum(weights.values())
+        if total == 0:
+            st.warning("Set at least one weight above zero.")
+            return
+        norm_str = " · ".join(
+            f"{DIM_SHORT[k]} {100 * v / total:.0f}%" for k, v in weights.items() if v
+        )
+        st.markdown(f"<div style='font-size:.7rem;color:{MUTED};'>Normalised: {norm_str}</div>",
+                    unsafe_allow_html=True)
+
+        base = df["opportunity_score"] if "opportunity_score" in df.columns \
+            else recompute_composite(df, _DEFAULT_WEIGHTS)
+        custom = recompute_composite(df, weights)
+        stab = rank_stability(base, custom, top_n=50)
+
+        c1, c2, c3 = st.columns(3)
+        c1.markdown(f"""<div class="card" style="border-top:3px solid {G_DARK};">
+          <div class="label">Rank correlation</div>
+          <div class="big-num">{stab['spearman']:.3f}</div>
+          <div class="sub-muted">Spearman vs default (1.0 = identical)</div></div>""",
+          unsafe_allow_html=True)
+        c2.markdown(f"""<div class="card" style="border-top:3px solid {BLUE};">
+          <div class="label">Top-50 overlap</div>
+          <div class="big-num">{stab['top_overlap']:.0%}</div>
+          <div class="sub-muted">of default top-50 counties still in top-50</div></div>""",
+          unsafe_allow_html=True)
+        c3.markdown(f"""<div class="card" style="border-top:3px solid #F4A261;">
+          <div class="label">Largest move</div>
+          <div class="big-num">{stab['max_jump']}</div>
+          <div class="sub-muted">biggest rank change within default top-50</div></div>""",
+          unsafe_allow_html=True)
+
+        # Biggest movers table
+        r_base = base.rank(ascending=False)
+        r_cust = custom.rank(ascending=False)
+        movers = pd.DataFrame({
+            "county": df["county_name"] + ", " + df["state_name"].map(STATE_ABBREV).fillna(""),
+            "default_rank": r_base.astype(int),
+            "custom_rank": r_cust.astype(int),
+        })
+        movers["Δ"] = movers["default_rank"] - movers["custom_rank"]
+        movers = movers[movers["default_rank"] <= 100].reindex(
+            movers["Δ"].abs().sort_values(ascending=False).index
+        ).head(8)
+        if not movers.empty and movers["Δ"].abs().max() > 0:
+            rows = "".join(
+                f"<tr><td>{r['county']}</td>"
+                f"<td style='text-align:center;'>{r['default_rank']}</td>"
+                f"<td style='text-align:center;'>{r['custom_rank']}</td>"
+                f"<td style='text-align:center;color:{G_DARK if r['Δ'] > 0 else '#E63946'};"
+                f"font-weight:700;'>{'+' if r['Δ'] > 0 else ''}{r['Δ']}</td></tr>"
+                for _, r in movers.iterrows()
+            )
+            st.markdown(
+                f'<div style="margin-top:.6rem;"><table class="tbl"><thead><tr>'
+                f'<th>Biggest movers (default top-100)</th><th>Default rank</th>'
+                f'<th>Custom rank</th><th>Δ</th></tr></thead><tbody>{rows}</tbody></table></div>',
+                unsafe_allow_html=True)
+        else:
+            st.markdown(f"<div style='font-size:.75rem;color:{MUTED};margin-top:.5rem;'>"
+                        f"No rank changes in the top 100 under these weights.</div>",
+                        unsafe_allow_html=True)
+
 
 # ── View 3: Investment Planner ────────────────────────────────────────────────
 def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
