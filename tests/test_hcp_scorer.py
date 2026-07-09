@@ -113,6 +113,16 @@ def test_gate_catches_dead_geo_join():
     assert any("geo match rate" in r.name for r in report.critical_failures)
 
 
+def test_foreign_addresses_dropped():
+    """CMS includes foreign-based providers ('M2N2N', 'HARAR') — the QA gate
+    blocked production on these; they must be filtered at standardisation."""
+    prov = _synthetic_providers(n=50)
+    prov.loc[prov.index[:3], "Rndrng_Prvdr_Zip5"] = ["M2N2N", "HARAR", "L2H0K"]
+    std = _standardise_providers(prov)
+    assert len(std) == 47
+    assert std["zip5"].str.fullmatch(r"\d{5}").all()
+
+
 def test_float_artifact_zips_handled():
     prov = _synthetic_providers(n=100)
     prov["Rndrng_Prvdr_Zip5"] = prov["Rndrng_Prvdr_Zip5"].astype(str) + ".0"

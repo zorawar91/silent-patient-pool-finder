@@ -26,8 +26,9 @@ Usage:
     make simulate
 """
 
-import random
 from __future__ import annotations
+
+import random
 from datetime import date, timedelta
 
 import numpy as np

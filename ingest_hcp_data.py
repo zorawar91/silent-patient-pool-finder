@@ -307,6 +307,13 @@ def _slim_provider_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
     type_col = next((c for c in slim.columns if c.lower() == "rndrng_prvdr_type"), None)
     if type_col is not None:
         slim = slim[slim[type_col].astype(str).str.lower().isin(TARGET_SPECIALTIES)]
+    # Stabilise dtypes across chunks: pandas infers Zip5/NPI as int in chunks
+    # without leading-zero values and str in chunks with them — pyarrow then
+    # rejects the mixed column at parquet write time.
+    for c in slim.columns:
+        cl = c.lower()
+        if "zip" in cl or "npi" in cl:
+            slim[c] = slim[c].astype(str)
     return slim
 
 

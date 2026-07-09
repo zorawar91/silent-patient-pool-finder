@@ -190,6 +190,14 @@ def _standardise_providers(raw: pd.DataFrame) -> pd.DataFrame:
         out["panel_diabetes_pct"] = vals
     else:
         out["panel_diabetes_pct"] = np.nan
+
+    # Drop non-US addresses — CMS includes a handful of foreign-based
+    # providers whose 'ZIP' is a foreign postcode ('M2N2N', 'HARAR', …).
+    us = out["zip5"].str.fullmatch(r"\d{5}")
+    n_foreign = int((~us).sum())
+    if n_foreign:
+        log.info(f"HCP scorer: dropping {n_foreign} non-US provider addresses")
+        out = out[us].reset_index(drop=True)
     return out
 
 
