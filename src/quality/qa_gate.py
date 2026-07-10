@@ -224,6 +224,12 @@ COUNTY_CHECKS: list[Check] = (
         # Coverage of key raw signals (WARN — degraded but usable)
         max_null_share("diabetes_prevalence_pct", 0.10, WARN,
                        "CDC PLACES coverage degraded — check download."),
+        # A flat trajectory means the "prior" release is a copy of current
+        # (CDC's rolling dataset ID trap) — trend + campaign pre-period dead.
+        min_std("diabetes_trend", 1e-6, WARN,
+                remedy="Prior PLACES release identical to current — delete "
+                       "data/open/cdc_places_prior.parquet and re-run "
+                       "(pinned archive IDs: xyst-f73f / mssc-ksj7)."),
         # Post-fill this column is never null — gate on TRUE pre-fill coverage
         # instead (confidence_sources_raw). CMS once covered only 236 counties
         # because '1,234'/'12.3%' strings coerced to NaN; that must WARN loudly.

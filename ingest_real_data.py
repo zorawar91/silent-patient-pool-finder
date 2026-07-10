@@ -801,11 +801,14 @@ def _download_cdc_places_prior() -> pd.DataFrame:
         log.info(f"  CDC PLACES (prior): {len(df):,} counties from cache")
         return df
 
-    # PLACES 2022 release (GIS wide format) — 2020 BRFSS data
-    # PLACES 2023 release (long format) — 2021 BRFSS data (fallback)
+    # IMPORTANT: dataset i46a-9kgh is the *rolling latest* release (CDC
+    # repoints it each year) — using it as "prior" once made prior == current
+    # and silently zeroed the entire trajectory trend. Pin ARCHIVED releases:
+    #   xyst-f73f — PLACES 2022 release (2020 BRFSS), GIS wide format
+    #   mssc-ksj7 — PLACES 2020 release (2018 BRFSS), GIS wide format
     urls = [
-        "https://data.cdc.gov/api/views/i46a-9kgh/rows.csv?accessType=DOWNLOAD",  # 2022 GIS
-        "https://data.cdc.gov/api/views/swc5-untb/rows.csv?accessType=DOWNLOAD",  # 2023 long
+        "https://data.cdc.gov/api/views/xyst-f73f/rows.csv?accessType=DOWNLOAD",  # 2022 release
+        "https://data.cdc.gov/api/views/mssc-ksj7/rows.csv?accessType=DOWNLOAD",  # 2020 release
     ]
 
     for url in urls:
@@ -840,6 +843,21 @@ def _download_cdc_places_prior() -> pd.DataFrame:
                     result[dst] = df_raw[src]
 
             result = result.dropna(subset=list(rename.values()), how="all")
+
+            # Sanity check: a "prior" release identical to the current one is
+            # the rolling-latest-ID trap — reject it and try the next URL.
+            cur_cache = Path(OPEN_DIR) / "cdc_places_county.parquet"
+            if cur_cache.exists() and "diabetes_prev_prior" in result.columns:
+                cur = pd.read_parquet(cur_cache)
+                m = result.merge(
+                    cur[["county_fips", "diabetes_prevalence_pct"]],
+                    on="county_fips", how="inner")
+                if len(m) and (m["diabetes_prev_prior"]
+                               == m["diabetes_prevalence_pct"]).mean() > 0.95:
+                    log.warning("    Prior release is identical to current "
+                                "(rolling dataset ID) — rejecting, trying next URL …")
+                    continue
+
             result.to_parquet(cache, index=False)
             log.info(
                 f"  CDC PLACES (prior): {len(result):,} counties | "

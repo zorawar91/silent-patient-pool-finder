@@ -36,16 +36,17 @@ class SourceSpec:
 
 SOURCE_REGISTRY: list[SourceSpec] = [
     SourceSpec(
-        "PLACES County Health Data", "CDC", "2024 release (2022 BRFSS)",
+        "PLACES County Health Data", "CDC", "2025 release (2023 BRFSS)",
         "cdc_places_county.parquet", "county", "diabetes_prevalence_pct",
         "Disease Burden · Diagnosis Gap",
         "https://www.cdc.gov/places/",
     ),
     SourceSpec(
-        "PLACES County (prior release)", "CDC", "2022 release (2020 BRFSS)",
+        "PLACES County (prior release)", "CDC", "2022 archive (2020 BRFSS)",
         "cdc_places_prior.parquet", "county", None,
-        "Trajectory (YoY trend)",
+        "Trajectory (3-yr trend) · Campaign Measurement pre-period",
         "https://www.cdc.gov/places/",
+        notes="Pinned archived dataset (xyst-f73f) — never the rolling ID.",
     ),
     SourceSpec(
         "American Community Survey (5-yr)", "US Census Bureau", "2022 5-year",
