@@ -271,6 +271,101 @@ METRIC_TOOLTIPS = {
     "counties_mapped":
         "Total counties visible on the map after applying the current state and condition filters. "
         "The tool covers all 3,143 US counties and county-equivalents.",
+    # ── Scorecard / percentile / confidence ──────────────────────────────────
+    "opportunity_percentile":
+        "Percentile rank among all 3,144 scored US counties. A county at the 94th percentile "
+        "outscores 94% of the country. This is the recommended headline number: the raw "
+        "composite intentionally tops out near 64 because no county leads on every dimension.",
+    "confidence_grade":
+        "Data coverage grade measured BEFORE any statistical imputation. "
+        "A = 6-7 of the 7 real sources observed this county directly; B = 4-5; C = fewer than 4 "
+        "(score leans on state-median estimates — treat with caution). "
+        "Current distribution: 3,123 A · 21 B · 0 C.",
+    "risk_score_cond":
+        "Condition-specific risk blend for the selected condition, built from the dimension "
+        "scores most predictive for that condition (e.g. T2D = 60% Disease Burden + 40% "
+        "Diagnosis Gap). Use the composite Opportunity Score for cross-condition planning.",
+    # ── ZIP Territory ─────────────────────────────────────────────────────────
+    "zip_count":
+        "ZCTAs (Census ZIP Code Tabulation Areas) matching the current filters, out of "
+        "33,791 scored nationally. ZCTAs approximate USPS ZIP codes.",
+    "zip_score":
+        "ZIP-level composite opportunity score. Disease Burden and Social Determinants come "
+        "from real ZCTA-level CDC PLACES and Census ACS data; the remaining dimensions are "
+        "downscaled from county scores via the Census ZCTA-county crosswalk, weighted by "
+        "land-area intersection.",
+    "zip_pctl":
+        "Percentile rank among all 33,791 scored ZCTAs nationally.",
+    "zip_conf":
+        "ZIP data confidence: A = direct ZCTA-level CDC + Census data AND county-derived "
+        "dimensions present; B = one of the two missing; C = mostly proxies.",
+    "zip_pool":
+        "Estimated undiagnosed adults in this ZIP across T2D, hypertension, and hypothyroidism: "
+        "adult population × diagnosed prevalence × published national undiagnosis rates "
+        "(T2D 23.1%, HTN ~20%, hypothyroidism ~50%). For relative sizing, not clinical use.",
+    # ── HCP Targeting ─────────────────────────────────────────────────────────
+    "hcp_count":
+        "US prescribers scored from the public CMS Medicare Physician & Other Practitioners "
+        "file (2023 data): target specialties only, US addresses, Medicare panels of 50+ "
+        "beneficiaries. No patient-level data of any kind.",
+    "hcp_score":
+        "HCP Priority Score (0-100): 40% geography (ZIP opportunity percentile at the practice "
+        "address) + 25% panel reach (Medicare panel size percentile) + 20% metabolic burden "
+        "(share of panel already diabetic) + 15% specialty fit (primary care highest). "
+        "Ranks where a diagnosis-support conversation is most valuable — makes no claim "
+        "about individual prescribing quality.",
+    "hcp_tier":
+        "Priority = top 5% of HCP Priority Scores; Emerging = next 20%; Developing = rest.",
+    "hcp_panel":
+        "Medicare Part B beneficiaries treated by this prescriber in the data year "
+        "(from the public CMS by-Provider file).",
+    "hcp_t2d":
+        "Share of the prescriber's Medicare panel with diagnosed diabetes (CMS chronic "
+        "condition flag). High values indicate a metabolically loaded panel where "
+        "undiagnosed comorbidities concentrate.",
+    "hcp_why":
+        "Auto-generated rationale summarizing which score components drive this "
+        "prescriber's rank — written for rep briefing documents.",
+    # ── Campaign Measurement ──────────────────────────────────────────────────
+    "cm_lift":
+        "Difference-in-differences estimate in percentage points: (change in diagnosed "
+        "prevalence among campaign counties) minus (change among matched controls) between "
+        "the two most recent CDC PLACES releases. Positive = campaign counties diagnosed "
+        "faster than their statistical twins. 95% CI from a 2,000-resample bootstrap.",
+    "cm_verdict":
+        "Significant means the 95% bootstrap confidence interval excludes zero. "
+        "A CI straddling zero does NOT prove the campaign failed — it means the effect "
+        "is not distinguishable from noise at this sample size and time window.",
+    "cm_treated":
+        "Campaign counties with both baseline and follow-up outcome data. "
+        "Δ diagnosed = their average change in diagnosed prevalence between releases.",
+    "cm_controls":
+        "Untouched counties matched to your campaign counties by nearest-neighbor on "
+        "standardized baseline covariates: prior prevalence, obesity, poverty, income, "
+        "uninsured rate, population, rurality. Their Δ estimates the secular trend your "
+        "counties would have followed without the campaign.",
+    # ── Weight sensitivity ────────────────────────────────────────────────────
+    "ws_spearman":
+        "Spearman rank correlation between the default-weight ranking and your custom "
+        "weighting across all 3,144 counties. 1.0 = identical ordering. Values above "
+        "0.95 mean the ranking is driven by the data, not the weight choice.",
+    "ws_overlap":
+        "Share of the default top-50 counties that remain in the top 50 under your "
+        "custom weights.",
+    "ws_maxjump":
+        "The single largest rank change among the default top-50 counties under your "
+        "custom weights.",
+    # ── Data Provenance ───────────────────────────────────────────────────────
+    "prov_coverage":
+        "Real coverage: rows where this source's key indicator is actually observed "
+        "(non-null) — counted from the cached file on disk, not from documentation claims.",
+    "prov_status":
+        "Live = file present and readable. The QA gates below re-verify content "
+        "quality on every dashboard load.",
+    "prov_qa":
+        "The same fail-loudly data contracts that run at the end of every ingestion "
+        "pipeline, re-executed against the exact files powering this session. "
+        "A critical failure here means the pipeline would refuse to ship this data.",
 }
 
 
@@ -1078,7 +1173,7 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
     dim_cols = [f"dim_{k}" for k in DIM_LABELS]
 
     # National dimension averages
-    st.markdown('<div class="sec-head">National Dimension Profile</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="sec-head">National Dimension Profile {_iicon(METRIC_TOOLTIPS["opportunity_score"], pos="")}</div>', unsafe_allow_html=True)
     st.markdown('<div class="sec-sub">Average score across all US counties for each of the 7 dimensions</div>', unsafe_allow_html=True)
 
     col_radar, col_bars = st.columns([1, 1])
@@ -1207,7 +1302,7 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
     for k in dim_keys:
         html += (
             f'<th style="{th_style}">'
-            f'{DIM_ICONS[k]} {DIM_SHORT[k]}'
+            f'{DIM_ICONS[k]} {DIM_SHORT[k]} {_iicon(DIM_TOOLTIPS[k], pos="")}'
             f'</th>'
         )
     html += '</tr></thead><tbody>'
@@ -1287,17 +1382,17 @@ def _render_weight_sensitivity(scores: pd.DataFrame):
 
         c1, c2, c3 = st.columns(3)
         c1.markdown(f"""<div class="card" style="border-top:3px solid {G_DARK};">
-          <div class="label">Rank correlation</div>
+          <div class="label">Rank correlation{_iicon(METRIC_TOOLTIPS["ws_spearman"], tip_cls="tip-r")}</div>
           <div class="big-num">{stab['spearman']:.3f}</div>
           <div class="sub-muted">Spearman vs default (1.0 = identical)</div></div>""",
           unsafe_allow_html=True)
         c2.markdown(f"""<div class="card" style="border-top:3px solid {BLUE};">
-          <div class="label">Top-50 overlap</div>
+          <div class="label">Top-50 overlap{_iicon(METRIC_TOOLTIPS["ws_overlap"])}</div>
           <div class="big-num">{stab['top_overlap']:.0%}</div>
           <div class="sub-muted">of default top-50 counties still in top-50</div></div>""",
           unsafe_allow_html=True)
         c3.markdown(f"""<div class="card" style="border-top:3px solid #F4A261;">
-          <div class="label">Largest move</div>
+          <div class="label">Largest move{_iicon(METRIC_TOOLTIPS["ws_maxjump"])}</div>
           <div class="big-num">{stab['max_jump']}</div>
           <div class="sub-muted">biggest rank change within default top-50</div></div>""",
           unsafe_allow_html=True)
@@ -1808,21 +1903,22 @@ def _render_county_scorecard(row: pd.Series, opp_col: str,
     conf  = str(row.get("confidence_grade", "")) or ""
     conf_str = f" · data confidence {conf}" if conf in ("A", "B", "C") else ""
     c1.markdown(f"""<div class="card-dark">
-      <div class="label-w">Opportunity Score</div>
+      <div class="label-w">Opportunity Score{_iicon(METRIC_TOOLTIPS["opportunity_percentile"], tip_cls="tip-r")}</div>
       <div class="big-num-w">{opp_val:.0f}</div>
       <div class="sub-w">{pctl_str}{conf_str}</div></div>""", unsafe_allow_html=True)
     c2.markdown(f"""<div class="card" style="border-top:3px solid {DIM_COLORS['diagnosis_gap']};">
-      <div class="label">Risk Score ({cond_label})</div>
+      <div class="label">Risk Score ({cond_label}){_iicon(METRIC_TOOLTIPS["risk_score_cond"])}</div>
       <div class="big-num">{risk_val:.0f}</div>
       <div class="sub-muted">out of 100</div></div>""", unsafe_allow_html=True)
     c3.markdown(f"""<div class="card" style="border-top:3px solid {imeta['color']};">
-      <div class="label">Recommended Program</div>
+      <div class="label">Recommended Program{_iicon(METRIC_TOOLTIPS["recommended_intervention"])}</div>
       <div style="font-size:.9rem;font-weight:700;color:{imeta['color']};margin-top:.3rem;">
         {imeta['icon']} {interv}</div></div>""", unsafe_allow_html=True)
     c4.markdown(f"""<div class="card">
-      <div class="label">Opportunity Tier</div>
+      <div class="label">Opportunity Tier{_iicon(METRIC_TOOLTIPS["priority_tier"])}</div>
       <div style="margin-top:.4rem;">{_tier_pill(row.get('opportunity_tier','Developing'))}</div>
-      <div class="sub-muted" style="margin-top:.4rem;">Est. pool: {pool_str}</div></div>""",
+      <div class="sub-muted" style="margin-top:.4rem;">Est. pool: {pool_str}
+        {_iicon(METRIC_TOOLTIPS["est_pool"], pos="")}</div></div>""",
       unsafe_allow_html=True)
 
     st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
@@ -2165,10 +2261,10 @@ def view_zip_territory(zip_scores: pd.DataFrame, county_scores: pd.DataFrame,
     st.markdown(f"""
     <div class="banner">
       <div class="banner-title">ZIP Code Territory Intelligence — {", ".join(state[:2]) + (f" +{len(state)-2} more" if len(state) > 2 else "") if state else "United States"}</div>
-      <div class="banner-stat">{n_total:,} ZIPs</div>
+      <div class="banner-stat">{n_total:,} ZIPs {_iicon(METRIC_TOOLTIPS["zip_count"], pos="", tip_cls="tip-l")}</div>
       <div class="banner-note">
-        {n_pri:,} Priority · {n_eme:,} Emerging · Avg score {avg_score:.0f} ·
-        {total_pool/1_000_000:.1f}M estimated undiagnosed patients
+        {n_pri:,} Priority · {n_eme:,} Emerging · Avg score {avg_score:.0f} {_iicon(METRIC_TOOLTIPS["zip_score"], pos="", tip_cls="tip-l")} ·
+        {total_pool/1_000_000:.1f}M estimated undiagnosed patients {_iicon(METRIC_TOOLTIPS["zip_pool"], pos="", tip_cls="tip-l")}
       </div>
     </div>""", unsafe_allow_html=True)
 
@@ -2317,16 +2413,16 @@ def _render_territory_builder(df: pd.DataFrame, score_col: str, county_scores: p
     total_pool = int(territory["zip_total_pool"].sum()) if "zip_total_pool" in territory.columns else 0
 
     k1, k2, k3, k4 = st.columns(4)
-    k1.markdown(f'<div class="card-dark"><div class="label-w">Territory ZIPs</div>'
+    k1.markdown(f'<div class="card-dark"><div class="label-w">Territory ZIPs{_iicon(METRIC_TOOLTIPS["zip_count"], tip_cls="tip-r")}</div>'
                 f'<div class="big-num-w">{n_found}</div>'
                 f'<div class="sub-w">matched in database</div></div>', unsafe_allow_html=True)
-    k2.markdown(f'<div class="card" style="border-top:3px solid {G_MID};"><div class="label">Avg Opportunity</div>'
+    k2.markdown(f'<div class="card" style="border-top:3px solid {G_MID};"><div class="label">Avg Opportunity{_iicon(METRIC_TOOLTIPS["zip_score"])}</div>'
                 f'<div class="big-num" style="color:{G_DARK};">{avg_score:.0f}</div>'
                 f'<div class="sub-muted">out of 100</div></div>', unsafe_allow_html=True)
-    k3.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority ZIPs</div>'
+    k3.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority ZIPs{_iicon(METRIC_TOOLTIPS["priority_tier"])}</div>'
                 f'<div class="big-num" style="color:{RED};">{pri_count}</div>'
                 f'<div class="sub" style="color:{RED};">Score ≥55</div></div>', unsafe_allow_html=True)
-    k4.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Est. Undiagnosed Pool</div>'
+    k4.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Est. Undiagnosed Pool{_iicon(METRIC_TOOLTIPS["zip_pool"])}</div>'
                 f'<div class="big-num" style="color:{AMBER};">{total_pool:,}</div>'
                 f'<div class="sub" style="color:{AMBER};">T2D + HTN + Hypo</div></div>', unsafe_allow_html=True)
 
@@ -2510,8 +2606,14 @@ def _render_zip_rankings(df: pd.DataFrame, score_col: str):
 
     st.markdown(
         f'<table class="tbl"><thead><tr>'
-        f'<th>#</th><th>ZIP</th><th>St.</th><th>Score</th><th>Pctl</th><th>Conf</th><th>Tier</th>'
-        f'<th>Est. Pool</th><th>T2D%</th><th>Poverty%</th><th>Program</th>'
+        f'<th>#</th><th>ZIP</th><th>St.</th>'
+        f'<th>Score {_iicon(METRIC_TOOLTIPS["zip_score"], pos="")}</th>'
+        f'<th>Pctl {_iicon(METRIC_TOOLTIPS["zip_pctl"], pos="")}</th>'
+        f'<th>Conf {_iicon(METRIC_TOOLTIPS["zip_conf"], pos="")}</th>'
+        f'<th>Tier {_iicon(METRIC_TOOLTIPS["priority_tier"], pos="")}</th>'
+        f'<th>Est. Pool {_iicon(METRIC_TOOLTIPS["zip_pool"], pos="")}</th>'
+        f'<th>T2D%</th><th>Poverty%</th>'
+        f'<th>Program {_iicon(METRIC_TOOLTIPS["recommended_intervention"], pos="")}</th>'
         f'</tr></thead><tbody>{rows_html}</tbody></table>',
         unsafe_allow_html=True,
     )
@@ -2560,7 +2662,7 @@ def view_hcp_targeting(hcp: pd.DataFrame, state: list = None):
     st.markdown(f"""
     <div class="banner">
       <div class="banner-title">HCP Targeting — Diagnosis-Support Detailing List</div>
-      <div class="banner-stat">{len(df):,} prescribers</div>
+      <div class="banner-stat">{len(df):,} prescribers {_iicon(METRIC_TOOLTIPS["hcp_count"], pos="", tip_cls="tip-l")}</div>
       <div class="banner-note">
         {n_pri:,} Priority · scored on geography opportunity ({W_LBL_GEO}),
         panel reach, metabolic burden &amp; specialty fit · public CMS data, no PHI
@@ -2611,7 +2713,11 @@ def view_hcp_targeting(hcp: pd.DataFrame, state: list = None):
     st.markdown(
         f'<table class="tbl"><thead><tr>'
         f'<th>#</th><th>Prescriber</th><th>Specialty</th><th>Location</th>'
-        f'<th>Priority Score</th><th>Tier</th><th>Panel</th><th>T2D%</th><th>Why</th>'
+        f'<th>Priority Score {_iicon(METRIC_TOOLTIPS["hcp_score"], pos="")}</th>'
+        f'<th>Tier {_iicon(METRIC_TOOLTIPS["hcp_tier"], pos="")}</th>'
+        f'<th>Panel {_iicon(METRIC_TOOLTIPS["hcp_panel"], pos="")}</th>'
+        f'<th>T2D% {_iicon(METRIC_TOOLTIPS["hcp_t2d"], pos="")}</th>'
+        f'<th>Why {_iicon(METRIC_TOOLTIPS["hcp_why"], pos="")}</th>'
         f'</tr></thead><tbody>{rows_html}</tbody></table>',
         unsafe_allow_html=True,
     )
@@ -2719,12 +2825,12 @@ def view_campaign_measurement(scores: pd.DataFrame):
     sig_color = G_DARK if (res.significant and res.estimate > 0) else "#F4A261"
     r1, r2, r3, r4 = st.columns(4)
     r1.markdown(f"""<div class="card-dark">
-      <div class="label-w">Diagnosis-rate lift</div>
+      <div class="label-w">Diagnosis-rate lift{_iicon(METRIC_TOOLTIPS["cm_lift"], tip_cls="tip-r")}</div>
       <div class="big-num-w">{res.estimate:+.2f}pp</div>
       <div class="sub-w">95% CI [{res.ci_low:+.2f}, {res.ci_high:+.2f}]</div></div>""",
       unsafe_allow_html=True)
     r2.markdown(f"""<div class="card" style="border-top:3px solid {sig_color};">
-      <div class="label">Verdict</div>
+      <div class="label">Verdict{_iicon(METRIC_TOOLTIPS["cm_verdict"])}</div>
       <div style="font-size:.95rem;font-weight:800;color:{sig_color};margin-top:.35rem;">
         {"✅ Significant lift" if (res.significant and res.estimate > 0)
          else ("⚠️ Significant decline" if res.significant else "— Not distinguishable from zero")}
@@ -2732,12 +2838,12 @@ def view_campaign_measurement(scores: pd.DataFrame):
       <div class="sub-muted" style="margin-top:.3rem;">bootstrap, 2,000 resamples</div></div>""",
       unsafe_allow_html=True)
     r3.markdown(f"""<div class="card" style="border-top:3px solid {BLUE};">
-      <div class="label">Campaign counties</div>
+      <div class="label">Campaign counties{_iicon(METRIC_TOOLTIPS["cm_treated"])}</div>
       <div class="big-num">{res.n_treated}</div>
       <div class="sub-muted">Δ diagnosed: {res.treated_delta:+.2f}pp</div></div>""",
       unsafe_allow_html=True)
     r4.markdown(f"""<div class="card" style="border-top:3px solid #8338EC;">
-      <div class="label">Matched controls</div>
+      <div class="label">Matched controls{_iicon(METRIC_TOOLTIPS["cm_controls"])}</div>
       <div class="big-num">{res.n_control}</div>
       <div class="sub-muted">Δ diagnosed: {res.control_delta:+.2f}pp</div></div>""",
       unsafe_allow_html=True)
@@ -2836,7 +2942,9 @@ def view_data_provenance(scores: pd.DataFrame):
     st.markdown(
         f'<table class="tbl"><thead><tr>'
         f'<th>Source</th><th>Provider</th><th>Vintage</th><th>Feeds</th>'
-        f'<th>Real coverage</th><th>Downloaded</th><th>Status</th>'
+        f'<th>Real coverage {_iicon(METRIC_TOOLTIPS["prov_coverage"], pos="")}</th>'
+        f'<th>Downloaded</th>'
+        f'<th>Status {_iicon(METRIC_TOOLTIPS["prov_status"], pos="")}</th>'
         f'</tr></thead><tbody>{rows_html}</tbody></table>',
         unsafe_allow_html=True,
     )
@@ -2858,7 +2966,8 @@ def view_data_provenance(scores: pd.DataFrame):
 
     # ── Confidence grade distribution ─────────────────────────────────────────
     if "confidence_grade" in scores.columns:
-        st.markdown('<div class="sec-head" style="margin-top:1.2rem;">County Data Confidence</div>',
+        st.markdown(f'<div class="sec-head" style="margin-top:1.2rem;">County Data Confidence '
+                    f'{_iicon(METRIC_TOOLTIPS["confidence_grade"], pos="")}</div>',
                     unsafe_allow_html=True)
         dist = scores["confidence_grade"].value_counts().reindex(["A", "B", "C"]).fillna(0)
         c1, c2, c3 = st.columns(3)
@@ -2873,7 +2982,8 @@ def view_data_provenance(scores: pd.DataFrame):
               <div class="sub-muted">{desc}</div></div>""", unsafe_allow_html=True)
 
     # ── Live QA gate report ───────────────────────────────────────────────────
-    st.markdown('<div class="sec-head" style="margin-top:1.2rem;">QA Gate Report (live)</div>',
+    st.markdown(f'<div class="sec-head" style="margin-top:1.2rem;">QA Gate Report (live) '
+                f'{_iicon(METRIC_TOOLTIPS["prov_qa"], pos="")}</div>',
                 unsafe_allow_html=True)
     st.markdown(f"""<div class="sec-sub">Fail-loudly data contracts re-run against
       the exact files powering this dashboard. A 🛑 here means the pipeline would
@@ -2981,7 +3091,7 @@ def view_insights(scores: pd.DataFrame, scores_long: pd.DataFrame,
 
     # ── Top 3 Action Counties ─────────────────────────────────────────────────
     st.markdown(f"""<div class='ch'>
-      <div class='sec-head'>🎯 Top 3 Counties to Act On Now</div>
+      <div class='sec-head'>🎯 Top 3 Counties to Act On Now {_iicon(METRIC_TOOLTIPS["opportunity_score"], pos="")}</div>
       <div class='sec-sub'>Highest composite opportunity scores in current filter — these are your first calls</div>
     </div>""", unsafe_allow_html=True)
 
