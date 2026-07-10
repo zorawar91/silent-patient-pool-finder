@@ -97,15 +97,18 @@ DIM_TOOLTIPS = {
     ),
     "social_determinants": (
         "What structural factors drive underdiagnosis? Combines poverty rate, household "
-        "income, uninsured rate, and high school graduation rate. Also applies a risk "
-        "uplift for counties with larger Black and Hispanic populations, who face "
-        "statistically higher rates of undiagnosed Type 2 Diabetes (source: US Census)."
+        "income, uninsured rate, food access, and high school graduation rate (all real "
+        "Census/USDA/CHR data), plus a structural-risk uplift derived from the composite "
+        "socioeconomic deprivation index. Note: the uplift is an SES-based proxy — it does "
+        "not currently use county demographic composition data."
     ),
     "payer_landscape": (
         "Who insures patients in this county, and how does that create program funding "
-        "opportunities? High Medicare Advantage enrollment gives insurers financial "
-        "incentives to fund early screening. High Medicaid share unlocks managed care "
-        "contract pathways. High commercial coverage suits employer wellness programs."
+        "opportunities? Medicare Advantage penetration is REAL county-level CMS data "
+        "(3,108 of 3,128 counties). Medicaid share, commercial share, and dual-eligible "
+        "share are MODELED estimates derived from SES signals and coverage arithmetic — "
+        "directionally sound but not sourced rates. Treat sub-signals other than MA "
+        "penetration as planning estimates."
     ),
     "commercial_readiness": (
         "How feasible is it to launch and scale a screening program here? Reflects "
@@ -183,14 +186,16 @@ METRIC_TOOLTIPS = {
         "the light shape represents all US counties. "
         "A larger shape indicates a stronger overall profile.",
     "patient_funnel":
-        "Estimated patient pathway from total adult population down to actionable screening "
-        "opportunity. Each step applies a national rate: total adults to disease prevalence, "
-        "to undiagnosed fraction, to detectable via indirect signals, to reachable by programs.",
+        "ILLUSTRATIVE national funnel — not computed from county data. The first three "
+        "steps (adult population, prevalence, undiagnosed fraction) use published "
+        "CDC/NHANES national figures; the last two ('detectable via indirect signals' "
+        "and 'reachable by programs') are planning assumptions included to frame the "
+        "opportunity, not measured quantities.",
     "risk_score":
-        "Machine learning-predicted geography risk score from 0 to 100 for this specific condition. "
-        "Based on patterns in over-the-counter product sales, gaps in diagnosed patient counts, "
-        "physician prescribing signals, and geographic disease burden indices. "
-        "This is separate from the composite Opportunity Score.",
+        "Condition-specific geography score from 0 to 100, computed as a weighted blend "
+        "of the dimension scores most relevant to the selected condition (e.g. T2D = "
+        "60% Disease Burden + 40% Diagnosis Gap). Built from the same public data as "
+        "the composite Opportunity Score — no patient-level or sales data is used.",
     "opp_score_dist":
         "Distribution of Opportunity Scores across all 3,143 US counties. "
         "Blue bars are lower-scoring developing counties, amber bars are emerging markets "
@@ -206,10 +211,13 @@ METRIC_TOOLTIPS = {
         "of their diagnosis. Hypertension frequently co-occurs with Type 2 Diabetes, "
         "increasing the combined screening opportunity.",
     "condition_hypo":
-        "Hypothyroidism — approximately 2.1 million estimated undiagnosed adults nationally. "
-        "Research suggests around 50% of hypothyroid cases remain undiagnosed. "
-        "Underdiagnosis is highest in rural counties with low checkup rates "
-        "and limited access to specialist care.",
+        "Hypothyroidism — approximately 2.1 million estimated undiagnosed adults nationally; "
+        "research suggests around 50% of cases remain undiagnosed. "
+        "IMPORTANT CAVEAT: no public dataset provides county-level thyroid measures, so "
+        "this condition's geography ranking is a PROXY built from the Diagnosis Gap (60%) "
+        "and Access to Care (40%) dimensions — where detection systems fail generally, "
+        "thyroid detection fails too. Treat as directional until a thyroid-specific "
+        "data source (e.g. lab-ordering data) is integrated.",
     "program_mix":
         "Recommended program type for each county, derived from its scoring profile. "
         "Counties with high Medicare Advantage enrollment are best suited to payer partnership programs. "
@@ -957,7 +965,7 @@ def render_sidebar(scores: pd.DataFrame):
         st.markdown(f"""<div style="font-size:.68rem;color:{MUTED};line-height:1.6;">
           ⚠️ Population-level planning tool only.<br>
           Not a clinical diagnostic instrument.<br>
-          Data: 5 real public health sources.<br>
+          Data: 7 public sources — see Data Provenance.<br>
           <span style="color:{G_LIGHT};font-weight:600;">v2.0 — 7-Dimension Framework</span>
         </div>""", unsafe_allow_html=True)
 
@@ -1765,6 +1773,11 @@ def view_payer_landscape(scores: pd.DataFrame, state: str, top_n: int):
     if payer_synthetic:
         st.info("📊 Showing **estimated** payer mix (SES-calibrated synthetic data). "
                 "Run `python3 ingest_real_data.py` to load real CMS county-level payer data.")
+    else:
+        st.caption("Medicare Advantage penetration: real CMS county data (3,108 of 3,128 "
+                   "counties). Medicaid, commercial, and dual-eligible shares: modeled "
+                   "estimates from SES signals and coverage arithmetic — directionally "
+                   "sound planning figures, not sourced rates.")
 
     # KPI strip
     ma_avg  = filtered["ma_penetration_rate"].mean() * 100

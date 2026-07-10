@@ -175,12 +175,19 @@ def _dim_diagnosis_gap(df: pd.DataFrame, signals: pd.DataFrame | None) -> pd.Dat
     """
     score = np.zeros(len(df))
 
+    # A CMS column with (near-)zero variance is a filled national constant,
+    # not data — treat it as absent so the honest fallback runs. A flat
+    # default once shipped here masquerading as a real detection signal.
+    def _real(col: str) -> bool:
+        return col in df.columns and float(
+            pd.to_numeric(df[col], errors="coerce").std() or 0.0) > 1e-9
+
     # ── T2D treatment penetration gap (CMS GV PUF × CDC PLACES) ─────────────
     # CDC PLACES diabetes_prevalence_pct = adults diagnosed with T2D (general pop)
     # cms_t2d_diagnosed_rate = % Medicare benes with T2D Dx code (≥65 population)
     # A county below the national Medicare median is catching FEWER T2D cases
     # than its peers → the gap between true burden and detected burden is wider.
-    if "cms_t2d_diagnosed_rate" in df.columns and "diabetes_prevalence_pct" in df.columns:
+    if _real("cms_t2d_diagnosed_rate") and "diabetes_prevalence_pct" in df.columns:
         cms_med = df["cms_t2d_diagnosed_rate"].median()
         # Below-median counties have a detection deficit
         cms_deficit = (cms_med - df["cms_t2d_diagnosed_rate"]).clip(lower=0)
@@ -195,10 +202,18 @@ def _dim_diagnosis_gap(df: pd.DataFrame, signals: pd.DataFrame | None) -> pd.Dat
     # Medicare HTN diagnosed rate nationally ~57-60%; counties below median are
     # systematically failing to identify hypertension in their Medicare population.
     # HTN is the most common undiagnosed condition (27% undiagnosed per AHA).
-    if "cms_htn_diagnosed_rate" in df.columns:
+    if _real("cms_htn_diagnosed_rate"):
         htn_med = df["cms_htn_diagnosed_rate"].median()
         htn_deficit = (htn_med - df["cms_htn_diagnosed_rate"]).clip(lower=0)
         score += 20 * _norm(htn_deficit)
+    else:
+        # CMS HTN signal unavailable — redistribute its 20 weight across the
+        # remaining REAL gap signals (care-seeking + affordability) rather
+        # than award a hidden flat constant.
+        if "annual_checkup_pct" in df.columns:
+            score += 10 * _norm(1 - df["annual_checkup_pct"])
+        if "uninsured_rate" in df.columns:
+            score += 10 * _norm(df["uninsured_rate"])
 
     # ── Diagnostic orphan proxy ───────────────────────────────────────────────
     # Proxy: counties with high SES disadvantage AND low checkup rates have the
@@ -265,7 +280,11 @@ def _dim_social_determinants(df: pd.DataFrame) -> pd.DataFrame:
     Weights (sum = 100):
       poverty_rate          25  — core economic hardship
       ses_disadvantage_idx  25  — composite deprivation
-      racial_risk_index     20  — demographic disease-risk disparity
+      racial_risk_index     20  — structural-risk uplift. NOTE: currently an
+                                   SES-derived proxy (0.15 + 0.35 × SES index),
+                                   NOT demographic composition data. Rename /
+                                   replace with real ACS demographics before
+                                   any claim referencing demographics is made.
       uninsured_rate        15  — insurance access barrier
       food_desert_pct       10  — USDA Food Environment Atlas (real) or CHR proxy
       hs_graduation_rate     5  — health literacy barrier

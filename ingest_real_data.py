@@ -1340,8 +1340,10 @@ _DEFAULTS = {
     "median_age":                  38.9,    # Census 2022
     "racial_risk_index":           0.200,
     "ses_disadvantage_index":      0.300,
-    "cms_t2d_diagnosed_rate":      0.300,   # CMS: ~30% Medicare beneficiaries
-    "cms_htn_diagnosed_rate":      0.580,
+    # NOTE: cms_t2d/htn_diagnosed_rate deliberately NOT defaulted — a flat
+    # national constant is not data. When the GV PUF download is unavailable
+    # the columns stay absent and the scorer uses its documented CDC-only
+    # fallback for the Diagnosis Gap dimension.
     "ma_penetration_rate":         0.540,   # CMS 2024: 54% nationally (updated)
     "medicaid_rate":               0.210,
     "commercial_rate":             0.380,
