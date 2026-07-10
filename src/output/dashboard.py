@@ -7,6 +7,7 @@ from __future__ import annotations
 # Run with: streamlit run src/output/dashboard.py
 
 import os
+import sys
 import json
 import urllib.request
 import streamlit as st
@@ -15,6 +16,18 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from pathlib import Path
+
+# ── Import bootstrap ──────────────────────────────────────────────────────────
+# Streamlit runs this file with src/output/ on sys.path, not the repo root —
+# on Streamlit Cloud that breaks every `from src....` import (ModuleNotFoundError
+# in Data Provenance / weight sensitivity / campaign measurement). Put the repo
+# root first, and pin the working directory so relative data/ paths resolve
+# no matter where the app is launched from.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+if not Path("data").exists() and (_REPO_ROOT / "data").exists():
+    os.chdir(_REPO_ROOT)
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
