@@ -157,6 +157,13 @@ def diff_in_diff(
     if len(t) == 0 or len(c) == 0:
         raise ValueError("Treated or control arm has no rows with both outcomes")
 
+    # Unit normalisation: CDC PLACES stores prevalence as fractions
+    # (0.136 = 13.6%). Report everything in PERCENTAGE POINTS so the
+    # buyer-facing number reads "+0.4pp", never "+0.004pp".
+    if float(np.nanmedian(df[outcome_post])) <= 1.0:
+        t = t * 100.0
+        c = c * 100.0
+
     est = float(t.mean() - c.mean())
 
     rng = np.random.default_rng(seed)

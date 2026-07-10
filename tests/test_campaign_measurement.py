@@ -81,6 +81,19 @@ def test_unknown_fips_raises():
         match_controls(_panel(), ["99999"])
 
 
+def test_fraction_units_scaled_to_pp():
+    """CDC PLACES stores prevalence as fractions — results must be in pp."""
+    df = _panel()
+    df["diabetes_prev_prior"] /= 100.0
+    df["diabetes_prevalence_pct"] /= 100.0
+    treated = df["county_fips"].sample(40, random_state=4).tolist()
+    mask = df["county_fips"].isin(treated)
+    df.loc[mask, "diabetes_prevalence_pct"] += TRUE_LIFT / 100.0
+    m = match_controls(df, treated, k=3)
+    res = diff_in_diff(df, m.treated_fips, m.control_fips)
+    assert res.estimate == pytest.approx(TRUE_LIFT, abs=0.3)   # pp, not fraction
+
+
 def test_missing_outcome_column_raises():
     df = _panel().drop(columns=["diabetes_prev_prior"])
     with pytest.raises(ValueError, match="Outcome column missing"):
