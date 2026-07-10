@@ -4,6 +4,23 @@ A county-level market intelligence platform that identifies where undiagnosed ch
 
 > ⚠️ **Population-level planning tool — not a clinical diagnostic instrument.** Outputs are indicators for market access, campaign planning, and resource allocation. All clinical decisions require licensed practitioner involvement.
 
+## 🚀 Try it in 60 seconds
+
+Pre-scored data ships with the repo — no API keys, no downloads, no setup beyond pip:
+
+```bash
+git clone https://github.com/zorawar91/silent-patient-pool-finder.git
+cd silent-patient-pool-finder
+pip install -r requirements.txt
+python3 -m streamlit run src/output/dashboard.py
+```
+
+Suggested 2-minute tour: **Insights & Actions** (the headline) → **7-Dimension Analysis**
+(open the weight-sensitivity sliders and try to break the ranking) → **HCP Targeting**
+(filter to your state, export the call list) → **Campaign Measurement** (paste FIPS
+`48479, 48215, 48061, 48323, 48505` for a live matched-control readout) →
+**Data Provenance** (every number, sourced, with 60+ QA checks re-run live).
+
 ---
 
 ## What it does

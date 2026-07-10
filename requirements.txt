@@ -24,8 +24,8 @@ joblib>=1.3
 sqlalchemy>=2.0
 psycopg2-binary>=2.9
 
-# Dashboard
-streamlit>=1.32
+# Dashboard — width="stretch" API requires 1.49+
+streamlit>=1.49,<2
 plotly>=5.18
 
 # Dev / testing

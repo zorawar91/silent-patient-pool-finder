@@ -1083,7 +1083,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
             bargap=0.05,
             margin=dict(l=0, r=0, t=20, b=30), height=260,
         )
-        _stplot(fig, use_container_width=True)
+        _stplot(fig, width="stretch")
 
     with col_interv:
         st.markdown(f'<div class="ch"><div class="sec-head">Recommended Interventions{_iicon(METRIC_TOOLTIPS["recommended_intervention"])}</div>'
@@ -1114,7 +1114,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
             margin=dict(l=0,r=0,t=0,b=0), height=180,
             paper_bgcolor="white", showlegend=False,
         )
-        _stplot(fig2, use_container_width=True)
+        _stplot(fig2, width="stretch")
 
         for iname, cnt in mix.items():
             meta = INTERV_META.get(str(iname), {"color": G_MID, "icon": "•"})
@@ -1145,7 +1145,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
         margin=dict(l=0, r=0, t=0, b=0), height=240,
         plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
     )
-    _stplot(fig3, use_container_width=True)
+    _stplot(fig3, width="stretch")
 
 
 # ── View 2: 7-Dimension Analysis ─────────────────────────────────────────────
@@ -1212,7 +1212,7 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
             margin=dict(l=30,r=30,t=30,b=50), height=360,
             paper_bgcolor="rgba(0,0,0,0)",
         )
-        _stplot(fig, use_container_width=True)
+        _stplot(fig, width="stretch")
 
     with col_bars:
         # Build all bars in ONE markdown call so the card wrapper encloses its content
@@ -1498,7 +1498,7 @@ def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
             plot_bgcolor="white", paper_bgcolor="white",
             margin=dict(l=0, r=40, t=10, b=30), height=280,
         )
-        _stplot(fig, use_container_width=True)
+        _stplot(fig, width="stretch")
 
         for _, prow in prog_counts.iterrows():
             meta = INTERV_META.get(str(prow["program"]), {"color":G_MID,"icon":"•","desc":""})
@@ -1548,7 +1548,7 @@ def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
             plot_bgcolor="white", paper_bgcolor="white",
             margin=dict(l=0, r=40, t=20, b=80), height=280,
         )
-        _stplot(fig2, use_container_width=True)
+        _stplot(fig2, width="stretch")
         st.markdown('<div style="font-size:.7rem;color:{MUTED};margin-top:.5rem;">⚠️ Yield figures based on published screening program literature. Actual results vary by market.</div>'.format(MUTED=MUTED), unsafe_allow_html=True)
 
     st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
@@ -1695,7 +1695,7 @@ def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
                 ),
                 height=480,
             )
-            _stplot(fig, use_container_width=True)
+            _stplot(fig, width="stretch")
         else:
             state_avg = (filtered.groupby("state_name")[opp_col].mean()
                          .reset_index().sort_values(opp_col, ascending=False).head(20))
@@ -1704,7 +1704,7 @@ def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
                          labels={"state_name":"","opportunity_score":"Avg Opportunity Score"})
             fig.update_layout(plot_bgcolor="white", paper_bgcolor="white",
                                margin=dict(l=0,r=0,t=10,b=0), height=480, coloraxis_showscale=False)
-            _stplot(fig, use_container_width=True)
+            _stplot(fig, width="stretch")
 
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1816,7 +1816,7 @@ def view_payer_landscape(scores: pd.DataFrame, state: str, top_n: int):
             coloraxis_colorbar=dict(title="Opp.", thickness=10, len=0.6,
                                     bgcolor="white", bordercolor=BORDER, borderwidth=1),
         )
-        _stplot(fig, use_container_width=True)
+        _stplot(fig, width="stretch")
 
     with col_mix:
         st.markdown(f'<div class="ch"><div class="sec-head">National Payer Mix{_iicon(METRIC_TOOLTIPS["payer_mix"])}</div>'
@@ -1835,7 +1835,7 @@ def view_payer_landscape(scores: pd.DataFrame, state: str, top_n: int):
             margin=dict(l=0,r=0,t=0,b=0), height=260,
             paper_bgcolor="white", showlegend=False,
         )
-        _stplot(fig2, use_container_width=True)
+        _stplot(fig2, width="stretch")
 
         st.markdown(f"""
         <div style="margin-top:.5rem;">
@@ -2084,7 +2084,7 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
                        title="Opportunity Score"),
             yaxis=dict(tickfont=dict(size=10)),
         )
-        _stplot(fig, use_container_width=True)
+        _stplot(fig, width="stretch")
 
     with col_right:
         # Tier donut
@@ -2100,7 +2100,7 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
             ))
             fig2.update_layout(margin=dict(l=0,r=0,t=0,b=0), height=190,
                                paper_bgcolor="white", showlegend=False)
-            _stplot(fig2, use_container_width=True)
+            _stplot(fig2, width="stretch")
 
         st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
 
@@ -2359,7 +2359,7 @@ def _render_zip_map(df: pd.DataFrame, score_col: str):
             bgcolor="white",
         ),
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     st.markdown(f"""<div style="font-size:.71rem;color:{MUTED};margin-top:-.5rem;">
       {len(plot_df):,} ZCTAs shown · sized by estimated undiagnosed pool · colored by Opportunity Score
@@ -2469,7 +2469,7 @@ def _render_territory_builder(df: pd.DataFrame, score_col: str, county_scores: p
                 margin=dict(l=20, r=20, t=30, b=20), height=260,
                 paper_bgcolor="white",
             )
-            _stplot(fig_r, use_container_width=True)
+            _stplot(fig_r, width="stretch")
 
     if "zip_recommended_intervention" in territory.columns:
         with col_interv:
