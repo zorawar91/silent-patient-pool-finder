@@ -2,6 +2,8 @@
 
 *Everything you need in the room. Print this or keep it open on your phone.*
 
+**Live demo:** https://silent-patient-pool-finder.streamlit.app · **Deck:** `Silent_Patient_Pool_Finder.pptx` (13 slides incl. backup Q&A slide)
+
 ---
 
 ## Three numbers, memorized cold
@@ -77,11 +79,13 @@ Quarterly measurement windows (claims verify new diagnoses instead of waiting fo
 
 ## Pre-demo checklist
 
+- [x] Live URL on deck: silent-patient-pool-finder.streamlit.app
+- [x] Screenshots inserted (final deck: Silent_Patient_Pool_Finder.pptx)
+- [x] Backup Q&A slide in deck (slide 13: demand-creation + "is this diagnosing?")
 - [ ] `git push` done; Streamlit Cloud shows latest (check Data Provenance loads)
-- [ ] Live URL QR code added to deck title + closing slides
-- [ ] Screenshots inserted in slides 4, 6, 7 (placeholders have instructions)
 - [ ] Backup screen recording on local disk AND phone
 - [ ] Deck PDF export on a USB stick (venue laptops hate .pptx fonts)
 - [ ] Rehearsed the slider moment twice and the FIPS paste once
 - [ ] Methodology doc printed or on tablet for Q&A hand-off
 - [ ] Three numbers cold: 8.7M · Starr County #1 · +0.9pp
+- [ ] If asked about the test suite: **35 tests** (deck corrected from 41 — the number a judge can verify with `pytest`)
