@@ -42,3 +42,6 @@ data/scored/scores_long.parquet
 .env
 *.key
 .streamlit/secrets.toml
+
+# Local backup copies of decks/docs — never publish
+*.backup.*
