@@ -10,8 +10,7 @@ help:  ## Show this help
 
 setup:  ## First-time setup: copy .env, install Python deps
 	@[ -f .env ] || cp .env.example .env && echo "Created .env — edit it before continuing"
-	pip install poetry --quiet
-	poetry install
+	pip install -r requirements.txt
 	mkdir -p synthea $(DATA_DIR)
 
 db-up:  ## Start PostgreSQL + pgAdmin via Docker
@@ -45,10 +44,10 @@ synthea-run: synthea-download  ## Generate synthetic patients (uses SYNTHEA_PATI
 	@echo "Synthetic data written to $(DATA_DIR)/csv/"
 
 ingest:  ## Load Synthea CSVs into PostgreSQL
-	poetry run python src/ingestion/ingest_synthea.py
+	python3 src/ingestion/ingest_synthea.py
 
 simulate:  ## Generate synthetic OTC pharmacy transactions
-	poetry run python src/ingestion/simulate_otc.py
+	python3 src/ingestion/simulate_otc.py
 
 pipeline: synthea-run ingest simulate  ## Run the full M1 pipeline end-to-end
 

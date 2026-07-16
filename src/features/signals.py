@@ -16,7 +16,6 @@ and a wide feature matrix suitable for XGBoost training.
 """
 
 import pandas as pd
-import numpy as np
 import yaml
 from pathlib import Path
 import logging

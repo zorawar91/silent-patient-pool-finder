@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """
 fix_zip_map.py — Patch ZIP centroids into existing zip_scores.parquet
 ======================================================================
@@ -6,12 +7,27 @@ Run this if ingest_zcta_data.py ran successfully but the map shows
 "Centroid data not available" (Census Gazetteer download timed out).
 
 Usage:
-    python3 fix_zip_map.py
+    python3 src/ingestion/fix_zip_map.py
 
 Downloads ZIP lat/lon from a fast GitHub-hosted CSV, merges it into
 data/scored/zip_scores.parquet, and saves the patched file in place.
 """
-from __future__ import annotations
+
+# ── Path bootstrap ────────────────────────────────────────────────────────────
+# Allows `python3 src/ingestion/<script>.py` from any directory: put the repo
+# root first on sys.path (for `src.` imports) and pin the working directory so
+# relative data/ paths resolve.
+import sys as _sys
+from pathlib import Path as _Path
+
+_REPO_ROOT = _Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_REPO_ROOT))
+if __name__ == "__main__":
+    import os as _os
+    _os.chdir(_REPO_ROOT)
+
+from src.ingestion.download import fetch
 
 import io
 import logging
@@ -20,7 +36,6 @@ import zipfile
 from pathlib import Path
 
 import pandas as pd
-import requests
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s  %(message)s", datefmt="%H:%M:%S"
@@ -38,7 +53,7 @@ def main():
 
     if not zip_scores_path.exists():
         log.error(f"zip_scores.parquet not found at {zip_scores_path}")
-        log.error("Run python3 ingest_zcta_data.py first.")
+        log.error("Run python3 src/ingestion/ingest_zcta_data.py first.")
         sys.exit(1)
 
     # 1. Download centroids
@@ -128,7 +143,7 @@ def _try_census_gazetteer() -> pd.DataFrame:
     for url in urls:
         try:
             log.info(f"  Census Gazetteer: {url[-50:]} …")
-            resp = requests.get(url, timeout=90)
+            resp = fetch(url, timeout=90)
             resp.raise_for_status()
             with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
                 txt = next((n for n in zf.namelist() if n.endswith(".txt")), None)
@@ -153,7 +168,7 @@ def _try_census_gazetteer() -> pd.DataFrame:
             raw = raw.rename(columns=col_map)
 
             if "zcta5" not in raw.columns or "lat" not in raw.columns:
-                log.warning(f"    Missing zcta5 or lat columns in Gazetteer file")
+                log.warning("    Missing zcta5 or lat columns in Gazetteer file")
                 continue
 
             result = pd.DataFrame({
@@ -182,7 +197,7 @@ def _try_github_scpike() -> pd.DataFrame:
     for url in urls:
         try:
             log.info(f"  GitHub ZIP DB: {url[-55:]} …")
-            resp = requests.get(url, timeout=TIMEOUT)
+            resp = fetch(url, timeout=TIMEOUT)
             resp.raise_for_status()
             raw = pd.read_csv(io.StringIO(resp.text), low_memory=False)
             raw.columns = raw.columns.str.lower().str.strip()
@@ -225,7 +240,7 @@ def _try_simplemaps() -> pd.DataFrame:
     for url in urls:
         try:
             log.info(f"  SimpleMaps: {url[-50:]} …")
-            resp = requests.get(url, timeout=TIMEOUT)
+            resp = fetch(url, timeout=TIMEOUT)
             resp.raise_for_status()
             with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
                 csv_files = [n for n in zf.namelist() if n.endswith(".csv")]
@@ -276,7 +291,7 @@ def _try_plotly_centers() -> pd.DataFrame:
         url = "https://raw.githubusercontent.com/plotly/datasets/master/2011_us_ag_exports.csv"
         # Actually use the better county centers CSV
         url = "https://raw.githubusercontent.com/btskinner/spatial/master/data/county_centers.csv"
-        resp = requests.get(url, timeout=TIMEOUT)
+        resp = fetch(url, timeout=TIMEOUT)
         resp.raise_for_status()
         cc = pd.read_csv(io.StringIO(resp.text), low_memory=False)
         cc.columns = cc.columns.str.lower()

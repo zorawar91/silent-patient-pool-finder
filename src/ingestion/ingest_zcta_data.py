@@ -22,18 +22,34 @@ Dimensions at ZCTA level:
   - trajectory:            DOWNSCALED from county
 
 Run:
-  python3 ingest_zcta_data.py
+  python3 src/ingestion/ingest_zcta_data.py
 
 Output:
   data/scored/zip_scores.parquet  (~33,000 ZCTAs with 7 dimension scores + lat/lon)
 
 Prerequisites:
-  Run python3 ingest_real_data.py first to produce dimension_scores.parquet (county).
+  Run python3 src/ingestion/ingest_real_data.py first to produce dimension_scores.parquet (county).
 
 Security:
   Database credentials live in .streamlit/secrets.toml (gitignored).
   This script does NOT touch the database.
 """
+
+# ── Path bootstrap ────────────────────────────────────────────────────────────
+# Allows `python3 src/ingestion/<script>.py` from any directory: put the repo
+# root first on sys.path (for `src.` imports) and pin the working directory so
+# relative data/ paths resolve.
+import sys as _sys
+from pathlib import Path as _Path
+
+_REPO_ROOT = _Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_REPO_ROOT))
+if __name__ == "__main__":
+    import os as _os
+    _os.chdir(_REPO_ROOT)
+
+from src.ingestion.download import fetch
 
 import io
 import logging
@@ -45,7 +61,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import requests
 
 logging.basicConfig(
     level=logging.INFO,
@@ -156,7 +171,7 @@ def _load_county_scores() -> pd.DataFrame:
     path = Path(SCORED_DIR) / "dimension_scores.parquet"
     if not path.exists():
         log.error(
-            "  County scores not found. Run python3 ingest_real_data.py first.\n"
+            "  County scores not found. Run python3 src/ingestion/ingest_real_data.py first.\n"
             f"  Expected: {path}"
         )
         sys.exit(1)
@@ -206,7 +221,7 @@ def _download_cdc_places_zcta() -> pd.DataFrame:
     for url in urls:
         try:
             log.info(f"  CDC PLACES ZCTA: trying {url[:70]} …")
-            resp = requests.get(url, timeout=TIMEOUT, stream=True)
+            resp = fetch(url, timeout=TIMEOUT, stream=True)
             resp.raise_for_status()
             with open(raw_csv, "wb") as f:
                 for chunk in resp.iter_content(chunk_size=1 << 20):
@@ -383,7 +398,7 @@ def _download_census_acs_zcta() -> pd.DataFrame:
     key_param = f"&key={api_key}" if api_key else ""
 
     # We request multiple variable groups in batches (Census API limit: 50 vars/call)
-    base = f"https://api.census.gov/data/2022/acs/acs5"
+    base = "https://api.census.gov/data/2022/acs/acs5"
     geo  = "for=zip%20code%20tabulation%20area:*"
 
     # Batch 1: population + poverty + income
@@ -405,8 +420,8 @@ def _download_census_acs_zcta() -> pd.DataFrame:
     rows1, rows2 = None, None
 
     try:
-        log.info(f"  ACS ZCTA batch 1: population + poverty + income …")
-        resp = requests.get(url1, timeout=TIMEOUT)
+        log.info("  ACS ZCTA batch 1: population + poverty + income …")
+        resp = fetch(url1, timeout=TIMEOUT)
         resp.raise_for_status()
         data = resp.json()
         rows1 = pd.DataFrame(data[1:], columns=data[0])
@@ -433,8 +448,8 @@ def _download_census_acs_zcta() -> pd.DataFrame:
 
     # Batch 2: health insurance (best effort)
     try:
-        log.info(f"  ACS ZCTA batch 2: health insurance …")
-        resp2 = requests.get(url2, timeout=TIMEOUT)
+        log.info("  ACS ZCTA batch 2: health insurance …")
+        resp2 = fetch(url2, timeout=TIMEOUT)
         resp2.raise_for_status()
         data2 = resp2.json()
         rows2 = pd.DataFrame(data2[1:], columns=data2[0])
@@ -494,8 +509,8 @@ def _download_zcta_crosswalk() -> pd.DataFrame:
     url = ("https://www2.census.gov/geo/docs/maps-data/data/rel2020/zcta520/"
            "tab20_zcta520_county20_natl.txt")
     try:
-        log.info(f"  Crosswalk: downloading from Census …")
-        resp = requests.get(url, timeout=TIMEOUT)
+        log.info("  Crosswalk: downloading from Census …")
+        resp = fetch(url, timeout=TIMEOUT)
         resp.raise_for_status()
 
         # File is pipe-delimited with header
@@ -624,7 +639,7 @@ def _download_zcta_centroids() -> pd.DataFrame:
     for url in gaz_urls:
         try:
             log.info(f"  Centroids (Gazetteer): {url[-50:]} …")
-            resp = requests.get(url, timeout=90)
+            resp = fetch(url, timeout=90)
             resp.raise_for_status()
             with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
                 txt = next((n for n in zf.namelist() if n.endswith(".txt")), None)
@@ -664,7 +679,7 @@ def _download_zcta_centroids() -> pd.DataFrame:
     for url in github_urls:
         try:
             log.info(f"  Centroids (GitHub): {url[-55:]} …")
-            resp = requests.get(url, timeout=60)
+            resp = fetch(url, timeout=60)
             resp.raise_for_status()
             raw = pd.read_csv(io.StringIO(resp.text), low_memory=False)
             raw.columns = raw.columns.str.lower().str.strip()
@@ -690,7 +705,7 @@ def _download_zcta_centroids() -> pd.DataFrame:
     try:
         log.info("  Centroids (SimpleMaps): trying …")
         url = "https://simplemaps.com/static/data/us-zips/1.0/basic/simplemaps_uszips_basicv1.0.zip"
-        resp = requests.get(url, timeout=60)
+        resp = fetch(url, timeout=60)
         resp.raise_for_status()
         with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
             csv_names = [n for n in zf.namelist() if n.endswith(".csv")]
@@ -715,7 +730,7 @@ def _download_zcta_centroids() -> pd.DataFrame:
 
     log.warning(
         "  Centroids: all sources failed.\n"
-        "  Run:  python3 fix_zip_map.py  to retry and patch zip_scores.parquet."
+        "  Run:  python3 src/ingestion/fix_zip_map.py  to retry and patch zip_scores.parquet."
     )
     return pd.DataFrame()
 

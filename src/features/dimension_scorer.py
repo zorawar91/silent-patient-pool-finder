@@ -17,8 +17,6 @@ import logging
 import numpy as np
 import pandas as pd
 import yaml
-from pathlib import Path
-from sklearn.preprocessing import MinMaxScaler
 
 log = logging.getLogger(__name__)
 
@@ -55,7 +53,7 @@ def compute_all_dimensions(
     DataFrame with county_fips + 7 dim scores (0-100) + composite (0-100)
     + intervention recommendation
     """
-    weights = _load_weights(config_path)
+    weights = load_weights(config_path)
     df = panel.copy()
 
     log.info("Computing 7 dimension scores ...")
@@ -458,7 +456,6 @@ def _recommend_intervention(row: pd.Series) -> str:
     payer   = row.get("dim_payer_landscape", 50)
     access  = row.get("dim_access_to_care", 50)
     sdoh    = row.get("dim_social_determinants", 50)
-    ready   = row.get("dim_commercial_readiness", 50)
     ma_rate = row.get("ma_penetration_rate", 0.3)
     rural   = row.get("is_rural", False)
     broadband = row.get("broadband_access_rate", 0.7)
@@ -575,18 +572,39 @@ def _confidence_grade(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
 
 def _norm(series: pd.Series) -> pd.Series:
     """Min-max normalize a Series to [0, 1], handling edge cases."""
-    s = pd.to_numeric(series, errors="coerce").fillna(series.median() or 0)
+    s = pd.to_numeric(series, errors="coerce")
+    med = s.median()
+    s = s.fillna(0.0 if pd.isna(med) else med)
     mn, mx = s.min(), s.max()
     if mx == mn:
         return pd.Series(0.5, index=s.index)
     return (s - mn) / (mx - mn)
 
 
-def _load_weights(config_path: str) -> dict:
-    """Load dimension weights from YAML config."""
+def load_weights(config_path: str = DIMENSIONS_CONFIG) -> dict:
+    """
+    Load dimension weights from YAML config.
+
+    Falls back to DEFAULT_WEIGHTS only when the file doesn't exist; a present
+    but malformed config raises so a typo can't silently revert the weights.
+    """
     try:
         with open(config_path) as f:
             cfg = yaml.safe_load(f)
+    except FileNotFoundError:
+        log.warning(
+            "Dimension config %s not found — using built-in default weights.",
+            config_path,
+        )
+        return dict(DEFAULT_WEIGHTS)
+    try:
         return {k: v["weight"] for k, v in cfg["dimensions"].items()}
-    except Exception:
-        return DEFAULT_WEIGHTS
+    except (KeyError, TypeError) as exc:
+        raise ValueError(
+            f"Malformed dimension config {config_path}: expected "
+            f"dimensions.<name>.weight entries ({exc!r})"
+        ) from exc
+
+
+# Backwards-compatible alias (pre-refactor name).
+_load_weights = load_weights

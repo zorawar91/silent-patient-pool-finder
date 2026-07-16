@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """
 ingest_hcp_data.py — HCP Activation Layer ingestion
 ====================================================
@@ -8,11 +9,11 @@ chronic-condition percentages), scores every targetable prescriber against
 the geography opportunity scores, and writes the rep-facing target list.
 
 Usage:
-    python3 ingest_hcp_data.py
+    python3 src/ingestion/ingest_hcp_data.py
 
 Requires (run first):
-    python3 ingest_real_data.py     → data/scored/dimension_scores.parquet
-    python3 ingest_zcta_data.py     → data/scored/zip_scores.parquet
+    python3 src/ingestion/ingest_real_data.py     → data/scored/dimension_scores.parquet
+    python3 src/ingestion/ingest_zcta_data.py     → data/scored/zip_scores.parquet
 
 Output:
     data/open/cms_providers.parquet     (cached raw provider extract)
@@ -28,17 +29,29 @@ Data notes:
       https://data.cms.gov/provider-summary-by-type-of-service/medicare-physician-other-practitioners/medicare-physician-other-practitioners-by-provider
       and save it to data/open/cms_providers_manual.csv
 """
-from __future__ import annotations
 
-import io
-import json
+# ── Path bootstrap ────────────────────────────────────────────────────────────
+# Allows `python3 src/ingestion/<script>.py` from any directory: put the repo
+# root first on sys.path (for `src.` imports) and pin the working directory so
+# relative data/ paths resolve.
+import sys as _sys
+from pathlib import Path as _Path
+
+_REPO_ROOT = _Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_REPO_ROOT))
+if __name__ == "__main__":
+    import os as _os
+    _os.chdir(_REPO_ROOT)
+
+from src.ingestion.download import fetch
+
 import logging
 import sys
 import time
 from pathlib import Path
 
 import pandas as pd
-import requests
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
                     datefmt="%H:%M:%S")
@@ -164,7 +177,7 @@ def _load_providers() -> pd.DataFrame:
         chunk = None
         for attempt in (1, 2, 3):
             try:
-                resp = requests.get(
+                resp = fetch(
                     f"{json_api}?size={size}&offset={offset}", timeout=300)
                 resp.raise_for_status()
                 data = resp.json()
@@ -189,11 +202,12 @@ def _load_providers() -> pd.DataFrame:
 
 def _download_provider_file(url: str) -> pd.DataFrame:
     """Stream the full CSV (or zipped CSV) release file and parse in chunks."""
-    import tempfile, zipfile
+    import tempfile
+    import zipfile
 
     log.info(f"  Providers: streaming direct download {url[:85]} …")
     try:
-        with requests.get(url, timeout=TIMEOUT, stream=True) as resp:
+        with fetch(url, timeout=TIMEOUT, stream=True) as resp:
             resp.raise_for_status()
             total = int(resp.headers.get("content-length", 0))
             with tempfile.NamedTemporaryFile(suffix=Path(url).suffix or ".csv",
@@ -250,7 +264,7 @@ def _resolve_dataset_urls() -> dict | None:
 
     try:
         log.info("  Resolving dataset UUID from data.cms.gov catalog …")
-        resp = requests.get(CATALOG_URL, timeout=TIMEOUT)
+        resp = fetch(CATALOG_URL, timeout=TIMEOUT)
         resp.raise_for_status()
         catalog = resp.json()
     except Exception as e:

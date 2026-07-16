@@ -62,9 +62,9 @@ def download(cache_dir: str = "data/open", force: bool = False, year: int = ACS_
     Returns one row per county_fips with computed SDoH features.
 
     SSL strategy (resolves macOS LibreSSL 2.8.3 incompatibility):
-      1. Try with certifi CA bundle — fixes most LibreSSL cert issues
-      2. Retry verify=False — skips cert check entirely
-      Both attempts also try http:// as a last resort per attempt.
+      Uses the certifi CA bundle, which fixes LibreSSL cert issues while
+      keeping verification ON. Insecure fallbacks (verify=False, plain http)
+      only run when SPPF_ALLOW_INSECURE_SSL=1 is explicitly set.
     """
     cache_path = Path(cache_dir) / f"census_acs_{year}.parquet"
     Path(cache_dir).mkdir(parents=True, exist_ok=True)
@@ -87,19 +87,19 @@ def download(cache_dir: str = "data/open", force: bool = False, year: int = ACS_
         )
     query = f"?get=NAME,{var_list}&for=county:*&in=state:*{key_param}"
 
-    # Ordered SSL strategies: certifi bundle → verify=False → http://
-    try:
-        import certifi
-        cert_bundle = certifi.where()
-    except ImportError:
-        cert_bundle = True  # system default
+    # SSL strategy: certifi bundle only. The old verify=False / plain-http
+    # fallbacks are a MITM risk, so they now require an explicit opt-in.
+    from src.ingestion.download import _allow_insecure, _ca_bundle
 
     import urllib3
     attempts = [
-        {"url": f"https://api.census.gov/data/{year}/acs/acs5{query}", "verify": cert_bundle},
-        {"url": f"https://api.census.gov/data/{year}/acs/acs5{query}", "verify": False},
-        {"url": f"http://api.census.gov/data/{year}/acs/acs5{query}",  "verify": False},
+        {"url": f"https://api.census.gov/data/{year}/acs/acs5{query}", "verify": _ca_bundle()},
     ]
+    if _allow_insecure():
+        attempts += [
+            {"url": f"https://api.census.gov/data/{year}/acs/acs5{query}", "verify": False},
+            {"url": f"http://api.census.gov/data/{year}/acs/acs5{query}",  "verify": False},
+        ]
 
     headers = {
         "User-Agent": "SPPF/1.0 (research; contact zorawarnandwal@gmail.com)",

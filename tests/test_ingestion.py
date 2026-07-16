@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 from datetime import date
 
-import pandas as pd
 import pytest
 
 # Legacy synthetic (Synthea) pipeline tests — superseded by the real-data
@@ -21,7 +20,6 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "src" / "ingestion"))
 from ingest_synthea import classify_rx, SNOMED_TO_GROUP, TARGET_LAB_LOINCS
 from simulate_otc import (
     random_dates_before,
-    random_dates_around,
     months_between,
     generate_otc_for_patient,
 )

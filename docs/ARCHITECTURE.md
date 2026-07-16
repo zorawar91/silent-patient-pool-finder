@@ -133,13 +133,13 @@ All signals are min-max normalized across all 3,144 counties before weighting. T
 ```bash
 # Step 1: ingest all 5 data sources and score all 3,144 counties
 export CENSUS_API_KEY=your_key
-python3 ingest_real_data.py
+python3 src/ingestion/ingest_real_data.py
 
 # Step 2: launch dashboard
 python3 -m streamlit run src/output/dashboard.py
 
 # Optional: push scored data to Neon
-python3 ingest_real_data.py --db
+python3 src/ingestion/ingest_real_data.py --db
 ```
 
 ---

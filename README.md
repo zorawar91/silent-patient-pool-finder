@@ -56,7 +56,7 @@ All data is ingested at the aggregate county level. No individual patient record
 ## Architecture
 
 ```
-ingest_real_data.py                ← counties: 7 real data sources
+src/ingestion/ingest_real_data.py  ← counties: 7 real data sources
         │
         ▼
 src/features/dimension_scorer.py   ← 3,144 counties × 7 dimensions
@@ -66,7 +66,7 @@ data/scored/dimension_scores.parquet
         │
         ├──────────────────────────────┐
         ▼                              ▼
-ingest_zcta_data.py                ingest_hcp_data.py
+src/ingestion/ingest_zcta_data.py  src/ingestion/ingest_hcp_data.py
 src/features/zip_scorer.py         src/features/hcp_scorer.py
 ~33,800 ZCTAs (crosswalk           ~530k prescribers (CMS by-Provider)
 downscaling + ZCTA-level CDC/ACS)  40/25/20/15 priority blend
@@ -103,13 +103,18 @@ silent-patient-pool-finder/
 │   └── ARCHITECTURE.md
 ├── src/
 │   ├── ingestion/
-│   │   └── open_data/         ← CDC, Census, CMS, HRSA downloaders
+│   │   ├── ingest_real_data.py  ← Main ingestion + scoring pipeline (counties)
+│   │   ├── ingest_zcta_data.py  ← ZIP/ZCTA-level scoring
+│   │   ├── ingest_hcp_data.py   ← HCP target-list scoring
+│   │   ├── download.py          ← Shared TLS-verified HTTP fetch helper
+│   │   └── open_data/           ← CDC, Census, CMS, HRSA downloaders
 │   ├── features/
 │   │   └── dimension_scorer.py
 │   └── output/
-│       └── dashboard.py
+│       ├── dashboard.py         ← Streamlit entry point
+│       ├── theme.py / content.py / data.py
+│       └── views/               ← One module per dashboard view
 ├── tests/
-├── ingest_real_data.py        ← Main ingestion + scoring pipeline
 ├── requirements.txt
 └── README.md
 ```
@@ -131,9 +136,9 @@ export CENSUS_API_KEY=your_key_here
 
 ### 3. Run the ingestion pipelines
 ```bash
-python3 ingest_real_data.py     # counties  (~3–4 min first run)
-python3 ingest_zcta_data.py     # ZIP codes (~2–3 min, needs county scores)
-python3 ingest_hcp_data.py      # HCP call lists (~5–10 min, 509 MB download)
+python3 src/ingestion/ingest_real_data.py     # counties  (~3–4 min first run)
+python3 src/ingestion/ingest_zcta_data.py     # ZIP codes (~2–3 min, needs county scores)
+python3 src/ingestion/ingest_hcp_data.py      # HCP call lists (~5–10 min, 509 MB download)
 ```
 
 Counties → 3,144 scored across 7 dimensions. ZIPs → ~33,800 ZCTAs scored via
@@ -161,7 +166,7 @@ python3 -m streamlit run src/output/dashboard.py
 ```bash
 # Add to .streamlit/secrets.toml:
 # NEON_DATABASE_URL = "postgresql://..."
-python3 ingest_real_data.py --db
+python3 src/ingestion/ingest_real_data.py --db
 ```
 
 ---

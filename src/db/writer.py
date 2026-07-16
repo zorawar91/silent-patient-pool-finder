@@ -40,7 +40,6 @@ def write_all_to_db(
     Write every pipeline output to Neon.
     Replaces tables on each run — safe for synthetic / dev data.
     """
-    base = Path("data")
     dirs = {"synthetic": Path(data_dir), "scored": Path(scored_dir)}
 
     all_tables = {**SYNTHETIC_TABLES, **SCORED_TABLES}
@@ -61,9 +60,15 @@ def write_all_to_db(
 
 def _write(df: pd.DataFrame, table: str, engine) -> None:
     """Write a DataFrame to a Postgres table, replacing existing data."""
-    # Boolean columns must be cast — Postgres is strict
-    for col in df.select_dtypes(include="bool").columns:
-        df[col] = df[col].astype(bool)
+    # Nullable pandas booleans (object / "boolean" dtype) trip Postgres —
+    # cast them on a copy so the caller's frame is untouched.
+    bool_like = [c for c in df.columns if df[c].dtype == "boolean" or (
+        df[c].dtype == object and df[c].dropna().isin([True, False]).all()
+        and df[c].notna().any())]
+    if bool_like:
+        df = df.copy()
+        for col in bool_like:
+            df[col] = df[col].astype("bool")
 
     df.to_sql(
         table,

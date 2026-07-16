@@ -17,15 +17,13 @@ import pandas as pd
 import numpy as np
 import yaml
 import joblib
-import json
 import logging
 from pathlib import Path
 
 import xgboost as xgb
-from sklearn.model_selection import cross_val_score
-from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
+from sklearn.base import clone
 from sklearn.metrics import r2_score, mean_absolute_error
+from sklearn.model_selection import GroupKFold
 import shap
 
 log = logging.getLogger(__name__)
@@ -40,26 +38,15 @@ def _spatial_cv_splits(
     county_fips: pd.Series,
     counties_df: pd.DataFrame,
     n_folds: int = 5,
-    seed: int = 42,
 ) -> list[tuple[np.ndarray, np.ndarray]]:
     """
-    Group counties by state → assign states to folds → return (train_idx, test_idx) pairs.
+    State-grouped CV folds: no state ever straddles train and test.
     This prevents a model trained on Manhattan from being tested on Brooklyn.
     """
-    rng = np.random.default_rng(seed)
     state_fips = counties_df.set_index("county_fips")["state_fips"]
     states = state_fips.loc[county_fips].values
-    unique_states = np.unique(states)
-    rng.shuffle(unique_states)
-
-    state_folds = {s: i % n_folds for i, s in enumerate(unique_states)}
-    fold_assignments = np.array([state_folds[s] for s in states])
-
-    splits = []
-    for fold in range(n_folds):
-        test_mask = fold_assignments == fold
-        splits.append((np.where(~test_mask)[0], np.where(test_mask)[0]))
-    return splits
+    dummy_X = np.zeros(len(states))
+    return list(GroupKFold(n_splits=n_folds).split(dummy_X, groups=states))
 
 
 def train_condition_model(
@@ -102,12 +89,14 @@ def train_condition_model(
         verbosity=0,
     )
 
-    # Spatial cross-validation
+    # Spatial cross-validation — clone per fold so no state leaks into the
+    # estimator that scores it.
     splits = _spatial_cv_splits(county_fips, counties_df, n_folds)
     cv_r2, cv_mae = [], []
     for train_idx, test_idx in splits:
-        model.fit(X[train_idx], y[train_idx], verbose=False)
-        preds = model.predict(X[test_idx])
+        fold_model = clone(model)
+        fold_model.fit(X[train_idx], y[train_idx], verbose=False)
+        preds = fold_model.predict(X[test_idx])
         cv_r2.append(r2_score(y[test_idx], preds))
         cv_mae.append(mean_absolute_error(y[test_idx], preds))
 

@@ -36,7 +36,6 @@ def load_all(
     DataFrame — one row per county_fips with all 7-dimension features
     """
     Path(cache_dir).mkdir(parents=True, exist_ok=True)
-    fips_list = counties["county_fips"].tolist()
     panel = counties[["county_fips", "county_name", "state_name", "state_abbr",
                        "population", "is_rural", "ses_disadvantage_index"]].copy()
 

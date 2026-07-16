@@ -18,7 +18,7 @@ Data sources:
   7. USDA Food Environment Atlas       → food desert % (social determinants)
 
 Run:
-  python3 ingest_real_data.py
+  python3 src/ingestion/ingest_real_data.py
 
 Output:
   data/scored/dimension_scores.parquet  (3,143 counties scored across 7 dimensions)
@@ -27,6 +27,22 @@ Security:
   Database credentials live in .streamlit/secrets.toml (gitignored).
   This script does NOT touch the database.
 """
+
+# ── Path bootstrap ────────────────────────────────────────────────────────────
+# Allows `python3 src/ingestion/<script>.py` from any directory: put the repo
+# root first on sys.path (for `src.` imports) and pin the working directory so
+# relative data/ paths resolve.
+import sys as _sys
+from pathlib import Path as _Path
+
+_REPO_ROOT = _Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_REPO_ROOT))
+if __name__ == "__main__":
+    import os as _os
+    _os.chdir(_REPO_ROOT)
+
+from src.ingestion.download import fetch
 
 import io
 import logging
@@ -174,7 +190,7 @@ def _download_census_counties() -> pd.DataFrame:
     # ── 2. Census TIGER live download ──────────────────────────────────────────
     url = "https://www2.census.gov/geo/docs/reference/codes/files/national_county.txt"
     try:
-        resp = requests.get(url, timeout=30)
+        resp = fetch(url, timeout=30)
         resp.raise_for_status()
         rows = []
         for line in resp.text.strip().splitlines()[1:]:   # skip header
@@ -295,7 +311,7 @@ def _census_counties_acs_fallback() -> pd.DataFrame:
     try:
         url = ("https://api.census.gov/data/2022/acs/acs5"
                "?get=NAME,B01003_001E&for=county:*&in=state:*")
-        resp = requests.get(url, timeout=60)
+        resp = fetch(url, timeout=60)
         resp.raise_for_status()
         data = resp.json()
         df_raw = pd.DataFrame(data[1:], columns=data[0])
@@ -381,16 +397,13 @@ def _download_saipe() -> pd.DataFrame:
             log.info(f"  SAIPE: {len(df):,} counties from cache")
             return df
 
-    import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
     for year in [2022, 2021]:
         year2 = str(year)[-2:]
         url = (f"https://www2.census.gov/programs-surveys/saipe/datasets/{year}/"
                f"{year}-state-and-county/est{year2}all.xls")
         try:
             log.info(f"  SAIPE {year}: {url}")
-            resp = requests.get(url, timeout=60, verify=False)
+            resp = fetch(url, timeout=60)
             resp.raise_for_status()
             if len(resp.content) < 100_000:
                 log.warning(f"  SAIPE: response too small ({len(resp.content):,} bytes)")
@@ -498,7 +511,7 @@ def _download_cms_gv_puf() -> pd.DataFrame:
     for url in urls:
         try:
             log.info(f"  CMS GV PUF: trying {url[:75]} …")
-            resp = requests.get(url, timeout=TIMEOUT_CMS)
+            resp = fetch(url, timeout=TIMEOUT_CMS)
             resp.raise_for_status()
             if len(resp.content) < 1000:
                 log.warning("    Response too small, skipping")
@@ -590,7 +603,7 @@ def _download_cms_ma_penetration_report() -> pd.DataFrame:
     for url in zip_urls:
         try:
             log.info(f"  CMS MA ZIP: {url}")
-            resp = requests.get(url, timeout=TIMEOUT)
+            resp = fetch(url, timeout=TIMEOUT)
             resp.raise_for_status()
             import zipfile
             with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
@@ -687,6 +700,8 @@ def _download_county_health_rankings() -> pd.DataFrame:
 
     # Automated download — often blocked by CHR's WAF; kept as best-effort
     _session = requests.Session()
+    from src.ingestion.download import _ca_bundle
+    _session.verify = _ca_bundle()
     _session.headers.update({
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                       "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -711,7 +726,7 @@ def _download_county_health_rankings() -> pd.DataFrame:
                 # WAF block — skip remaining URLs, they will all 403
                 log.warning(
                     "  CHR: WAF blocked automated download (403). "
-                    f"Download manually → save to data/open/analytic_data_chr.csv"
+                    "Download manually → save to data/open/analytic_data_chr.csv"
                 )
                 break
             resp.raise_for_status()
@@ -814,7 +829,7 @@ def _download_cdc_places_prior() -> pd.DataFrame:
     for url in urls:
         try:
             log.info(f"  CDC PLACES (prior): trying {url[:70]} …")
-            resp = requests.get(url, timeout=TIMEOUT, stream=True)
+            resp = fetch(url, timeout=TIMEOUT, stream=True)
             resp.raise_for_status()
             raw_path = Path(OPEN_DIR) / "_cdc_places_prior_raw.csv"
             with open(raw_path, "wb") as f:
@@ -906,7 +921,7 @@ def _download_usda_food_atlas() -> pd.DataFrame:
     for url in urls:
         try:
             log.info(f"  USDA Food Atlas: trying {url[:70]} …")
-            resp = requests.get(url, timeout=TIMEOUT, headers=headers)
+            resp = fetch(url, timeout=TIMEOUT, headers=headers)
             resp.raise_for_status()
             if len(resp.content) < 10_000:
                 log.warning("    Response too small, skipping")
@@ -1308,7 +1323,8 @@ def _norm01(s: pd.Series) -> pd.Series:
 
 
 def _log_provenance(cdc, cdc_prior, acs, cms, chr_df, usda):
-    ok = lambda df: "✅ REAL" if not df.empty else "⚠️  synthetic"
+    def ok(df):
+        return "✅ REAL" if not df.empty else "⚠️  synthetic"
     log.info(
         "\nData provenance:"
         f"\n  Disease burden:      {ok(cdc)} (CDC PLACES 2024)"

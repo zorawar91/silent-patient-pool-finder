@@ -106,8 +106,14 @@ def run_pipeline(
             dim_scores.to_parquet(dim_scores_path, index=False)
             log.info(f"✓ 7-dimension scoring complete ({time.time()-t0:.1f}s)")
             log.info(f"  Priority counties (score≥55): {(dim_scores['opportunity_score'] >= 55).sum()}")
-        except Exception as exc:
-            log.warning(f"Open data / dimension scoring failed ({exc}). Continuing without it.")
+        except Exception:
+            # Keep the legacy pipeline usable without open data, but make the
+            # degradation impossible to miss: full traceback + banner warning.
+            log.exception("Open data / dimension scoring FAILED — "
+                          "dimension_scores.parquet was NOT refreshed.")
+            log.warning("=" * 60)
+            log.warning("  CONTINUING WITH DEGRADED OUTPUT (no 7-dimension scores)")
+            log.warning("=" * 60)
     else:
         log.info("Skipping open data download (--skip-open-data and cache exists)")
 

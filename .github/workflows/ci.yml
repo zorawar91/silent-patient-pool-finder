@@ -20,14 +20,14 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pandas numpy pyarrow pyyaml scikit-learn requests \
-                      streamlit plotly pytest
+          pip install -r requirements.txt
+          pip install ruff
+
+      - name: Lint (ruff)
+        run: ruff check .
 
       - name: Compile all modules
-        run: |
-          python -m py_compile ingest_real_data.py ingest_zcta_data.py \
-                               ingest_hcp_data.py fix_zip_map.py
-          find src -name "*.py" -exec python -m py_compile {} +
+        run: find src -name "*.py" -exec python -m py_compile {} +
 
       - name: Run test suite
         run: python -m pytest tests/ -q
@@ -36,7 +36,7 @@ jobs:
         run: |
           python - <<'EOF'
           import ast, pathlib
-          src = pathlib.Path("src/output/dashboard.py").read_text()
-          ast.parse(src)
-          print("dashboard.py parses OK")
+          for p in pathlib.Path("src/output").rglob("*.py"):
+              ast.parse(p.read_text())
+          print("dashboard modules parse OK")
           EOF

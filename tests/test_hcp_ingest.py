@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 _spec = importlib.util.spec_from_file_location(
-    "ihd", Path(__file__).resolve().parents[1] / "ingest_hcp_data.py")
+    "ihd", Path(__file__).resolve().parents[1] / "src" / "ingestion" / "ingest_hcp_data.py")
 ihd = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ihd)
 
@@ -51,7 +51,7 @@ def _mock_get(*a, **k):
 
 
 def test_resolves_exact_dataset_latest_year_real_host():
-    with patch.object(ihd.requests, "get", _mock_get):
+    with patch.object(ihd, "fetch", _mock_get):
         urls = ihd._resolve_dataset_urls()
     # Correct dataset (NOT "and Service"), latest year, hosts rebuilt
     assert urls["api_url"] == ("https://data.cms.gov/data-api/v1/dataset/"
@@ -61,7 +61,7 @@ def test_resolves_exact_dataset_latest_year_real_host():
 
 
 def test_missing_dataset_returns_none():
-    with patch.object(ihd.requests, "get", _mock_get):
+    with patch.object(ihd, "fetch", _mock_get):
         old = ihd.DATASET_TITLE
         ihd.DATASET_TITLE = "nonexistent dataset"
         try:

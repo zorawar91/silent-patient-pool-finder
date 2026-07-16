@@ -1,36 +1,32 @@
-[tool.poetry]
+# Project metadata + tool configuration.
+# Dependencies are managed in requirements.txt (single source of truth):
+#   pip install -r requirements.txt
+
+[project]
 name = "silent-patient-pool-finder"
-version = "0.1.0"
+version = "2.0.0"
 description = "Multi-signal inference engine to identify undiagnosed chronic-disease patient pools"
-authors = ["Zorawar Singh Nandwal"]
 readme = "README.md"
-package-mode = false
-
-[tool.poetry.dependencies]
-python = "^3.9"
-pandas = "^2.1"
-psycopg2-binary = "^2.9"
-sqlalchemy = "^2.0"
-python-dotenv = "^1.0"
-numpy = "^1.26"
-tqdm = "^4.66"
-loguru = "^0.7"
-
-[tool.poetry.group.dev.dependencies]
-jupyter = "^1.0"
-pytest = "^7.4"
-pytest-cov = "^4.1"
-black = "^23.0"
-ruff = "^0.1"
-ipykernel = "^6.0"
+requires-python = ">=3.9"
+authors = [{ name = "Zorawar Singh Nandwal" }]
 
 [tool.black]
 line-length = 100
 
 [tool.ruff]
 line-length = 100
-select = ["E", "F", "I"]
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.ruff.lint]
+# E4/E7/E9: import & statement errors, F: pyflakes (undefined names, unused
+# imports/variables). Line-length (E501) is left to black's judgement.
+select = ["E4", "E7", "E9", "F"]
+# E402 is structural here: every entry-point script starts with a sys.path /
+# cwd bootstrap (Streamlit Cloud + `python3 src/ingestion/<script>.py`), and
+# the house style puts `from __future__` + module docstring before imports.
+ignore = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: long-running tests (deselect with '-m \"not slow\"')",
+]

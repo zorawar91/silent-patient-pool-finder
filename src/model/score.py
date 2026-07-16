@@ -93,8 +93,8 @@ def run(
         predicted_rate = model.predict(X)
         risk_score = _scale_to_risk_score(predicted_rate)
 
-        cond_features[f"predicted_undiagnosed_rate"] = predicted_rate
-        cond_features[f"risk_score"] = risk_score
+        cond_features["predicted_undiagnosed_rate"] = predicted_rate
+        cond_features["risk_score"] = risk_score
         cond_features["condition"] = condition
         cond_features["top_signal"] = cond_features.apply(_top_signal, axis=1)
 
@@ -243,7 +243,7 @@ def run(
     available = [c for c in export_cols if c in wide.columns]
     wide[available].to_csv(out_path / "opportunity_table.csv", index=False)
 
-    log.info(f"Scoring complete. Top 5 opportunity counties:")
+    log.info("Scoring complete. Top 5 opportunity counties:")
     log.info(f"\n{wide[['county_name', 'state_name', 'overall_risk_score', 'opportunity_score']].head().to_string(index=False)}")
 
     return wide
