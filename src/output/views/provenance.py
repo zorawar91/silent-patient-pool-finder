@@ -126,5 +126,5 @@ def view_data_provenance(scores: pd.DataFrame):
       Methodology: county opportunity score = weighted blend of 7 dimension scores
       (weights in config/dimensions.yaml) · percentile = rank among 3,144 counties ·
       confidence grade reflects pre-imputation source coverage ·
-      full details in SPPF_Methodology_v1.0.docx and docs/ARCHITECTURE.md.
+      full details in SPPF_Methodology_v2.0.docx and docs/ARCHITECTURE.md.
     </div>""", unsafe_allow_html=True)
