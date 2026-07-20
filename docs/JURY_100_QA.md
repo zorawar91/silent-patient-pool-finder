@@ -1,4 +1,4 @@
-# SPPF — 130 Jury Questions & Answers
+# SPPF — 150 Jury Questions & Answers
 
 *Print-ready. Brutal questions included deliberately — if it's in here, it can't ambush you.
 Answers are written to be spoken: 2–4 sentences, no hedging, concede what's true.
@@ -443,3 +443,75 @@ A robot that re-runs every test automatically on every code change and blocks an
 
 **130. What is YAML config, as in "each condition is a config file"?**
 A plain-text settings file a human can read — disease name, data fields, weights. "New condition = new config file" means expanding to kidney disease is filling in a form, not rebuilding the engine. That's the whole expansion economics in one sentence.
+
+---
+
+## K. Pharma Vocabulary, You Personally, and Live-Demo Situations (131–150)
+
+*Words from your own deck you must be able to define, questions solo presenters always get, and moments that happen live.*
+
+### Pharma words you'll say — own them (131–140)
+
+**131. What exactly is a "claim," as in claims data?**
+The bill. Every time a doctor visit, test, or prescription is paid through insurance, a billing record is created — that's a claim. Claims data is the industry's core dataset, and its blind spot is our whole thesis: no diagnosis, no bill, no record.
+
+**132. What is a "brand team"?**
+The business unit inside a pharma company responsible for one drug — its marketing, budget, and growth targets. They're our buyer: the people whose bonus depends on finding more patients for that one product.
+
+**133. What is a GLP-1, and why do you keep mentioning it?**
+The diabetes-and-obesity drug class behind Ozempic and similar medicines — the biggest commercial phenomenon in pharma history. It matters here because these companies have maxed out diagnosed patients; their growth now depends on new diagnoses, which is exactly what SPPF finds.
+
+**134. What is "detailing" and what is a "rep"?**
+A rep (sales representative) is pharma's field person who visits doctors; detailing is that visit. Traditionally it's product promotion; the visits SPPF ranks are diagnosis-support conversations — helping practices screen and catch hidden disease.
+
+**135. What are "decile lists"?**
+The industry's standard targeting method: rank doctors 1–10 by how much they already prescribe, call the top deciles. Its flaw is our opening argument — it can only rank the already-diagnosed world.
+
+**136. What is "market access" as a job?**
+The pharma function that deals with insurers and health systems — getting drugs covered and programs funded. They're persona three in our product: the payer-partnership view exists for them.
+
+**137. What is a "payer" vs a "provider"?**
+Payer = who pays (insurance companies, Medicare, Medicaid). Provider = who treats (doctors, clinics, hospitals). SPPF maps both: payers for who funds screening, providers for who performs it.
+
+**138. What is Medicare vs Medicare Advantage vs Medicaid?**
+Medicare: US government insurance for people 65+. Medicare Advantage (MA): the version run by private insurers under government contract — with quality bonuses that make them fund screening. Medicaid: government insurance for low-income people. Our payer dimension measures the mix per county.
+
+**139. What are Veeva and OCE?**
+The two dominant CRM systems pharma reps run their day on — the software holding their call lists. "CRM-ready export" means our prescriber list drops into the tools reps already use, no new software to adopt.
+
+**140. What is "DTC"?**
+Direct-to-consumer advertising — drug ads aimed at patients. SPPF's geographic scores could target DTC spend too, but our recommended interventions are screening programs, deliberately, for both ethics and measurability.
+
+### About you — the solo-presenter questions (141–146)
+
+**141. "What's your background? You're not from pharma."**
+Correct — and I treated that as a constraint to design around, not hide: everything in this platform is built on published epidemiology, government data documentation, and validation logic, precisely because I couldn't lean on insider intuition. The domain experts I need next are the reason I'm pitching here rather than building alone.
+
+**142. "Have you spoken to a single real customer?"**
+Not yet — by sequencing, not avoidance: I built the artifact first because in this market a slide deck without a working product is noise. The pilot ask IS the customer-discovery plan, priced low enough to make the conversation easy. If the jury includes commercial pharma people, the discovery starts in this room.
+
+**143. "How long did this take, and who helped?"**
+Weeks, not months — built solo with AI-assisted engineering, which I'd state proudly: it's how small teams will out-ship big ones, including inside IQVIA. Every framework decision, validation design, and honest disclosure is mine; the acceleration is the tooling.
+
+**144. "What would your role be if IQVIA adopts this?"**
+Product owner — the person who holds the methodology, the honesty register, and the roadmap. I'd want IQVIA engineers, a health economist, and a commercial sponsor around it; what I bring is the product judgment and the proof that I ship.
+
+**145. "What's the biggest thing you don't know?"**
+Pharma's internal buying reality — how budget approvals, compliance sign-offs, and brand-team politics actually flow. That's learnable and exactly what a pilot plus an IQVIA sponsor teaches; what wasn't learnable-later was the data discipline, so I built that first.
+
+**146. "Why should we trust a non-domain founder with a healthcare product?"**
+Because the product's entire design philosophy is verifiability over authority — every claim traceable to a public source, every assumption labeled, every number recomputable in front of you. Domain veterans ask you to trust their experience; this asks you to check its work.
+
+### Live-demo situations (147–150)
+
+**147. "Show me my home county, right now."**
+Do it — this is a gift, not a threat. Type their state, find the county, and read the scorecard aloud: percentile, tier, top dimensions, recommended program, confidence grade. If it's a low-opportunity county, even better: "the tool says don't spend money here — that's half its value."
+
+**148. "Can I open this on my phone right now?"**
+Yes — give them the URL (silent-patient-pool-finder.streamlit.app). It's public by design at this stage; nothing in it is sensitive because nothing in it is private data. Judges independently poking the live app while you talk is the best thing that can happen to you.
+
+**149. The app is down or slow, mid-demo.**
+Acknowledge in one sentence — "free-tier hosting, waking up" — and switch to the backup recording without apology; the click-path storyboard is identical. Then offer the repo: "everything also runs locally in sixty seconds — that reproducibility is a feature." Never debug live.
+
+**150. "Stop the demo. Just tell me plainly: what happens in the first 90 days if we say yes?"**
+Week 1–2: pick the brand and condition with your team. Week 3–8: I deliver the market opportunity assessment — ranked counties, ZIP maps, prescriber lists for that brand. Week 9–12: we pre-register the campaign geography and matched controls, so the moment the campaign runs, the measurement clock starts. One brand, one condition, one signed page — and you'll know by the data whether to scale or stop.
