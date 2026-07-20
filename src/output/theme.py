@@ -328,6 +328,14 @@ button[data-baseweb="tab"][aria-selected="true"] {{
 [data-testid="stSidebarCollapsedControl"] {{
     display: none !important;
 }}
+/* …but keep the "Analyst & Audit" expander toggle clickable (the rule above
+   is deliberately broad; this re-enables just the expander header). */
+[data-testid="stSidebar"] [data-testid="stExpander"] summary,
+[data-testid="stSidebar"] [data-testid="stExpander"] details > summary,
+[data-testid="stSidebar"] [data-testid="stExpander"] button {{
+    display: flex !important;
+    visibility: visible !important;
+}}
 
 /* ── Fix: force sidebar text visible regardless of Streamlit theme ── */
 [data-testid="stSidebar"] {{ color:{DARK}; }}

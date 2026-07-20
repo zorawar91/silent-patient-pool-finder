@@ -1,10 +1,45 @@
 from __future__ import annotations
 # Sidebar navigation + global filters for the SPPF dashboard.
+#
+# Navigation is grouped by audience, not by feature count. The three decision
+# views a leader actually acts on are always visible; the eight analyst/audit
+# views live in a collapsed "Analyst & Audit" group — depth on demand. The two
+# radios are coordinated so exactly one view is ever selected (picking in one
+# group clears the other), which keeps a single source of truth for `view`.
 
 import pandas as pd
 import streamlit as st
 
 from src.output.theme import BORDER, DARK, G_DARK, G_LIGHT, MUTED
+
+# Decision views — where a leader looks: the opportunity, the plan, the map.
+DECISION_VIEWS = [
+    "⚡  Insights & Actions",
+    "💡  Investment Planner",
+    "🗺️  Geographic Intelligence",
+]
+# Analyst & Audit — depth an analyst opens to interrogate or defend the above.
+AUDIT_VIEWS = [
+    "📊  Market Overview",
+    "🔭  7-Dimension Analysis",
+    "📍  State Drill-Down",
+    "💳  Payer Landscape",
+    "🗂️  ZIP & Territory",
+    "🎯  HCP Targeting",
+    "📐  Campaign Measurement",
+    "📋  Data Provenance",
+]
+_DECISION_KEY = "_nav_decision"
+_AUDIT_KEY = "_nav_audit"
+
+
+def _pick_decision():
+    # Picking a decision view clears the audit selection (mutual exclusion).
+    st.session_state[_AUDIT_KEY] = None
+
+
+def _pick_audit():
+    st.session_state[_DECISION_KEY] = None
 
 
 def render_sidebar(scores: pd.DataFrame) -> dict:
@@ -20,20 +55,28 @@ def render_sidebar(scores: pd.DataFrame) -> dict:
           </div>
         </div>""", unsafe_allow_html=True)
 
-        st.markdown("<div class='label' style='margin-bottom:.4rem;'>View</div>", unsafe_allow_html=True)
-        view = st.radio("Navigation", [
-            "⚡  Insights & Actions",
-            "📊  Market Overview",
-            "🔭  7-Dimension Analysis",
-            "💡  Investment Planner",
-            "🗺️  Geographic Intelligence",
-            "💳  Payer Landscape",
-            "📍  State Drill-Down",
-            "🗂️  ZIP & Territory",
-            "🎯  HCP Targeting",
-            "📐  Campaign Measurement",
-            "📋  Data Provenance",
-        ], label_visibility="collapsed")
+        # Default landing view = Insights & Actions (seed before the widgets
+        # so the decision radio opens on it and the audit group stays empty).
+        if _DECISION_KEY not in st.session_state and _AUDIT_KEY not in st.session_state:
+            st.session_state[_DECISION_KEY] = DECISION_VIEWS[0]
+
+        st.markdown("<div class='label' style='margin-bottom:.4rem;'>Decision Views</div>",
+                    unsafe_allow_html=True)
+        st.radio("Decision navigation", DECISION_VIEWS, index=None,
+                 key=_DECISION_KEY, on_change=_pick_decision,
+                 label_visibility="collapsed")
+
+        # The eight analyst/audit views — collapsed by default, auto-expanded
+        # only when the active view is one of them (so the selection stays visible).
+        audit_active = st.session_state.get(_AUDIT_KEY) in AUDIT_VIEWS
+        with st.expander("🔎  Analyst & Audit", expanded=audit_active):
+            st.radio("Analyst navigation", AUDIT_VIEWS, index=None,
+                     key=_AUDIT_KEY, on_change=_pick_audit,
+                     label_visibility="collapsed")
+
+        active = (st.session_state.get(_DECISION_KEY)
+                  or st.session_state.get(_AUDIT_KEY)
+                  or DECISION_VIEWS[0])
 
         st.markdown("---")
 
@@ -90,7 +133,7 @@ def render_sidebar(scores: pd.DataFrame) -> dict:
         </div>""", unsafe_allow_html=True)
 
     return {
-        "view": view.split("  ")[1],
+        "view": active.split("  ")[1],
         "condition": condition,
         "cond_label": cond_label,
         "state": state,
