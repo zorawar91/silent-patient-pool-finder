@@ -2,7 +2,7 @@
 
 *Everything you need in the room. Print this or keep it open on your phone.*
 
-**Live demo:** https://silent-patient-pool-finder.streamlit.app · **Deck:** `Silent_Patient_Pool_Finder.pptx` (13 slides incl. backup Q&A slide)
+**Live demo:** https://silent-patient-pool-finder.streamlit.app · **Deck:** `Silent_Patient_Pool_Finder_20072026_v1.pptx` (16 slides: adds validation slide 9, stack slide 13, analyst-backup slide 16)
 
 ---
 
@@ -70,7 +70,7 @@ The GLP-1 era made patient *finding* the binding constraint in metabolic disease
 Diversification by design: seven independent sources, no single point of failure, and the QA gates + confidence grades make any degradation visible immediately rather than silently. County Health Rankings — whose funding ends in 2026 — is already only a backup signal, and its data is being preserved open-source. Worst case, the claims-integration tier replaces any lost signal with better data.
 
 **11. "Can I see the methodology?"**
-Yes — 25-page methodology document including the validation appendix and a disclosed-assumptions register, and the full codebase with 35 automated tests and CI is open for technical diligence. Hand them the doc.
+Yes — 25-page methodology document including the validation appendix and a disclosed-assumptions register, and the full codebase with 44 automated tests and CI is open for technical diligence. Hand them the doc.
 
 **12. "What would you build next with IQVIA's data?"**
 Quarterly measurement windows (claims verify new diagnoses instead of waiting for CDC release cycles), true payer mix (replacing the modeled Medicaid/commercial shares), Rx-validated HCP targeting, and CKD/MASH condition modules — the two largest undiagnosed pools in pharma's current pipeline. Each one makes the public-data core more valuable, not obsolete.
@@ -89,7 +89,7 @@ Quarterly measurement windows (claims verify new diagnoses instead of waiting fo
 | 12:00–13:00 | *Roadmap + ask* | Slide 11–12. Stop talking at 13:00. |
 | 13:00–15:00 | Buffer / early Q&A | Judges always run over — protect this buffer. |
 
-**On "at least 40% developed":** don't say a percentage — show the denominator. "Everything in today's demo is functional and deployed: eleven dashboard views, three scored data layers, the measurement engine, 35 automated tests, live URL. What's *not* built is the roadmap — condition modules, claims integration — and that's deliberate: the MVP proves the method end-to-end on three conditions before we scale it."
+**On "at least 40% developed":** don't say a percentage — show the denominator. "Everything in today's demo is functional and deployed: eleven dashboard views, three scored data layers, the measurement engine, 44 automated tests, live URL. What's *not* built is the roadmap — condition modules, claims integration — and that's deliberate: the MVP proves the method end-to-end on three conditions before we scale it."
 
 ## Quantified impact (the brief demands numbers — use these)
 
@@ -146,4 +146,4 @@ Quarterly measurement windows (claims verify new diagnoses instead of waiting fo
 - [ ] Rehearsed the slider moment twice and the FIPS paste once
 - [ ] Methodology doc printed or on tablet for Q&A hand-off
 - [ ] Three numbers cold: 8.7M · Starr County #1 · +0.9pp
-- [ ] If asked about the test suite: **35 tests** (deck corrected from 41 — the number a judge can verify with `pytest`)
+- [ ] If asked about the test suite: **44 tests** (deck corrected from 41 — the number a judge can verify with `pytest`)

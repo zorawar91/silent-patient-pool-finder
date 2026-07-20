@@ -1,7 +1,14 @@
-# SPPF — 100 Jury Questions & Answers
+# SPPF — 130 Jury Questions & Answers
 
 *Print-ready. Brutal questions included deliberately — if it's in here, it can't ambush you.
-Answers are written to be spoken: 2–4 sentences, no hedging, concede what's true.*
+Answers are written to be spoken: 2–4 sentences, no hedging, concede what's true.
+Sections I and J are new: the Part III validation numbers on your slides 9/13/16, and a
+plain-language glossary so every technical word you say is one you can explain.*
+
+**⚠️ Three sync flags from the deck review (fix or know cold):**
+1. **Slide 12 says "45-test CI suite" — the verifiable number is 44** (`pytest --collect-only`). Say "over 40 automated tests" or fix the slide.
+2. **Slide 9's "ρ = 0.93" must be described as rank COHERENCE across data vintages** (the ranking stays stable when data updates) — NOT as predicting the change in diagnosis gap. Your own Part III Table 61 shows the composite does *not* beat naive at predicting short-window *changes* (see Q104 — this is the single most dangerous question in the room).
+3. **Slide 13 lists XGBoost + SHAP under "Scoring & ML"** — they exist in the repo's R&D/legacy lineage, but the production score is deliberately deterministic. Know Q103's framing.
 
 ---
 
@@ -136,7 +143,7 @@ Marginal, and the tool says so — selections under 5 counties get a warning ins
 Deliberate regression from the v1 prototype, which used XGBoost on synthetic data. A transparent weighted index is auditable by a client's analysts, explainable to a jury, and provably robust via the sensitivity panel. ML re-enters where it earns its complexity — lift forecasting on claims data — not where it would just add opacity.
 
 **41. What's your ground-truth validation? Correlating with what actually IS undiagnosed?**
-The honest answer: face validity, internal robustness, and measurement-engine validation exist today; external ground-truth validation is Phase 1 — correlating our gap scores against NHANES measured-vs-reported prevalence differences, the closest thing to ground truth that exists. It's the top of the roadmap, not an afterthought.
+Part III of the methodology now has a held-out-source test: score the counties, then check the ranking against a data source the model never saw. Against the held-out County Health Rankings measure, SPPF ranks at ρ = 0.47 where the naive population-times-prevalence spreadsheet scores −0.08 — a lift of +0.55. NHANES measured-vs-reported and USRDS kidney data are the next held-out sources, already scaffolded in the harness.
 
 **42. Could two counties with identical scores have completely different reasons?**
 Yes — and the product is built for exactly that. The scorecard shows all seven dimension values, the heatmap shows profile shapes, and the intervention recommendation differs accordingly: a high-payer county gets a payer partnership, a high-SDoH/low-access county gets community health centers. The composite ranks; the profile prescribes.
@@ -155,7 +162,7 @@ For pure *ranking*, burden + gap + access captures most of the ordering — the 
 ## D. Product & Technology (46–57)
 
 **46. What's the stack, in 30 seconds?**
-Python/pandas ingestion pipelines per source, parquet storage, a deterministic scoring engine, and a Streamlit dashboard — deployed on Streamlit Cloud, CI on GitHub Actions, 35 automated tests, every pipeline ending in a QA gate. Boring on purpose: auditable beats clever for this buyer.
+Python/pandas ingestion pipelines per source, parquet storage, a deterministic scoring engine, and a Streamlit dashboard — deployed on Streamlit Cloud, CI on GitHub Actions, 44 automated tests, every pipeline ending in a QA gate. Boring on purpose: auditable beats clever for this buyer.
 
 **47. Streamlit isn't enterprise-grade. How does this scale?**
 Agreed for the enterprise phase — Streamlit is the right MVP choice (fast iteration, zero front-end cost) and the wrong endgame. Phase 1 moves to authenticated, containerized client workspaces; the scoring engine underneath doesn't change. The data volume is tiny — scale here is organizational, not computational.
@@ -173,10 +180,10 @@ Not yet — deliberately. The MVP's user is a human making planning decisions, a
 Today's app holds zero sensitive data — public aggregates in, geographies out — which makes the current review trivial. The moment client-specific data enters (campaign lists, custom weights), Phase 1 adds auth and workspace isolation, and SOC 2 is the Phase 3 gate for enterprise.
 
 **52. Who maintains this if you get hit by a bus?**
-The mitigation is discipline, not heroics: everything is in a public repo with CI, 35 tests, a QA-gate system that explains its own failures, a 25-page methodology, and a PRD. A competent data engineer could take over in a week. That's unusual for an MVP, and deliberate.
+The mitigation is discipline, not heroics: everything is in a public repo with CI, 44 tests, a QA-gate system that explains its own failures, a 25-page methodology, and a PRD. A competent data engineer could take over in a week. That's unusual for an MVP, and deliberate.
 
 **53. How much of this did AI build?**
-I built it with AI-assisted engineering, and I'd say that proudly to this jury: it's how modern teams will work, including at IQVIA. Every scoring decision, framework choice, and validation design is mine; the AI accelerated implementation roughly tenfold. And unlike most AI-assisted code, this has 35 tests, CI, QA gates, and a full audit trail — judge the artifact, not the tool.
+I built it with AI-assisted engineering, and I'd say that proudly to this jury: it's how modern teams will work, including at IQVIA. Every scoring decision, framework choice, and validation design is mine; the AI accelerated implementation roughly tenfold. And unlike most AI-assisted code, this has 44 tests, CI, QA gates, and a full audit trail — judge the artifact, not the tool.
 
 **54. Why eleven dashboard views? Isn't that bloated for an MVP?**
 Each view maps to a distinct user decision — market pick, territory design, prescriber targeting, payer strategy, measurement, audit. The count reflects the workflow's real surface, not feature-stuffing; nothing in the demo path is skippable without losing a persona.
@@ -306,7 +313,7 @@ It's live, open, documented, and I'll keep building it — the ideathon is an ac
 ## H. Brutal / Curveballs (91–100)
 
 **91. "This looks like a school project with good slides." Respond.**
-Fair challenge — here's the falsifiable difference: it's deployed at a public URL, scores every county, ZIP, and prescriber in America, carries 35 automated tests and 60+ data-quality gates, passed a real-data placebo test, and ships a 25-page methodology with a disclosed-assumptions register. Clone the repo and audit it tonight. School projects don't invite diligence; this is built for it.
+Fair challenge — here's the falsifiable difference: it's deployed at a public URL, scores every county, ZIP, and prescriber in America, carries 44 automated tests and 60+ data-quality gates, passed a real-data placebo test, and ships a 25-page methodology with a disclosed-assumptions register. Clone the repo and audit it tonight. School projects don't invite diligence; this is built for it.
 
 **92. "You have zero users and zero revenue. Why are you confident?"**
 I'm not confident about demand — that's what the pilot tests, and I've priced it to make testing cheap. I'm confident about the two things I could control pre-revenue: that the problem is real (the GLP-1 era made it urgent) and that the artifact survives scrutiny. Everything else is a hypothesis with a 90-day experiment attached.
@@ -327,10 +334,112 @@ True — no campaign has run against it yet; that's definitionally the pilot's j
 Every data product this age has these weaknesses; mine are labeled and yours to inspect, most vendors' are discovered by clients after the invoice. The disclosure register isn't unfinishedness — it's the trust architecture that makes a pharma analytics team say yes. Fund the team that shows you the seams.
 
 **98. "What's the one question you were hoping we wouldn't ask?"**
-External ground-truth validation — I can't yet show that my diagnosis-gap score correlates with independently measured undiagnosis, because the NHANES study is Phase 1. Everything else — robustness, placebo, provenance — is done; that one is a promise with a date on it. You've now heard my weakest point, from me first.
+Predicting *change*. My score is validated for ranking where hidden burden sits today — held-out test, ρ 0.47 versus −0.08 for the naive spreadsheet — but Part III also shows it does not beat naive at predicting which counties' gaps will *move* over a two-to-three-year survey window; short-run changes in modeled survey data are mostly noise. That's exactly why change is measured rather than predicted: the campaign engine with matched controls exists because forecasting deltas from public data doesn't work. You've now heard my weakest point, from me first, with the table number.
 
 **99. "Convince me in one sentence."**
 The biggest untapped market in chronic disease is the patients no dataset can see — SPPF finds them geographically, activates them through prescribers, and is the only tool that then proves whether it worked.
 
 **100. "Last question: why you?"**
 Because I built the unglamorous parts nobody builds for a demo — the QA gates, the placebo test, the assumptions register — before anyone asked. That instinct, applied with IQVIA's data and distribution, is the difference between a clever idea and a product pharma actually trusts. The repo is public; judge me by what's in it.
+
+---
+
+## I. The Part III Validation Numbers — Slides 9, 13, 16 (101–112)
+
+*These are YOUR slides' claims. Every number here must come out of your mouth correctly.*
+
+**101. Explain slide 9's "Δρ = +0.55 (0.47 vs −0.08)" in plain words.**
+We asked: if you rank counties with a five-minute spreadsheet — population times disease rate — versus with SPPF, which ranking better matches a data source neither has ever seen? Agreement is measured on a scale where 1.0 is perfect and 0 is random. The spreadsheet scored −0.08 — no better than shuffling the list. SPPF scored 0.47 — a real, meaningful match. The gap between them, +0.55, is what you're paying for beyond Excel.
+
+**102. What is the "temporal out-of-time test" and what does ρ = 0.93 actually mean? ⚠️ SAY THIS CAREFULLY.**
+It means *stability*, not prophecy: freeze the score built on the old data release, bring in the new release, and check whether the ranking holds — 0.93 on a 0-to-1 scale means the map you plan a two-year program on won't be a different map next year. Do NOT say it "predicts the change in diagnosis gap" — predicting short-window changes is a different, harder task, and our own Part III shows nobody beats noise at that (see next question).
+
+**103. Why do XGBoost and SHAP appear on your stack slide if you say the scoring has no ML?**
+Both are true, and precision matters: the repo's lineage includes an ML pipeline — XGBoost with SHAP explainability and spatially grouped cross-validation — from the R&D phase, and it remains in the codebase for benchmarking. The *production* score is a deterministic weighted index, chosen deliberately because a pharma analytics team can audit every number by hand. The stack slide describes the codebase; the scoring slide describes the product.
+
+**104. "Your own Table 61 shows the composite is WORSE than naive at predicting gap changes — ρ −0.09, p = 0.014. Explain." ☢️ THE MOST DANGEROUS QUESTION.**
+You've read the methodology carefully — good, that table is there on purpose. It tests something the product doesn't claim: forecasting which counties' modeled survey estimates will wiggle over a 2–3 year window, which is mostly statistical noise, and the table shows honestly that nothing — us or naive — predicts it usefully. What the score IS validated for is ranking where hidden burden sits — the held-out test at 0.47 vs −0.08. Levels, we predict; changes, we *measure*, with the matched-control engine. A vendor who hid that table would be scarier than one who printed it.
+
+**105. What does slide 16's "ΔR² = +0.20, partial r = 0.51" mean, simply?**
+It answers "aren't you just ranking poor counties?" with arithmetic. First explain poverty's share of the story, then ask: does the Diagnosis Gap dimension add anything poverty didn't already tell you? It does — it explains a fifth more of the variation (that's the +0.20), and its independent link to opportunity, after removing everything poverty explains, is 0.51 on a −1-to-1 scale (that's the partial r), with odds this is chance below one in a thousand (p < 0.001). Deprivation and opportunity are related; they are not the same map.
+
+**106. What is a "naive baseline" and why do you keep comparing against it?**
+It's the five-minute Excel answer — rank counties by population × prevalence — and it's what most teams actually use today. Any model must beat the tool the buyer already has for free, or it has no right to exist. Reporting every result as *lift over that baseline* is us grading ourselves against the honest alternative, not against zero.
+
+**107. What is "Spearman ρ" that appears all over your validation?**
+A score for how well two rankings agree, from −1 (perfectly opposite) through 0 (no relationship) to +1 (identical order). We use rankings rather than raw values because the product's job is ordering counties — who's first, who's fiftieth — not predicting exact percentages.
+
+**108. What was "held out" in the held-out-source test — and why does that matter?**
+A data source the score never ingested was set aside as an exam: score the counties without it, then check the ranking against it. Agreement with data you never touched is evidence you've measured something real about the world, not memorized your own inputs. It's the tabular equivalent of a student acing questions that weren't in the textbook.
+
+**109. "Your precision-at-top-20 improvement has p = 0.162 — that's not significant."**
+Correct, and it's printed rather than hidden: at only 20 counties the sample is too small for that particular metric to clear significance, even though the point estimate more than doubles the baseline. The significant results — held-out lift and the partial correlation — carry the validation case; the top-20 metric is reported for completeness, not as proof.
+
+**110. Who ran this validation — is it independent?**
+It's self-run, scripted, and reproducible — one command on the public repo regenerates every table, which is the strongest form of non-independent validation that exists pre-partnership. Independent replication is precisely what the NHANES/USRDS extensions and a pilot's client analytics team provide next.
+
+**111. What is "spatially grouped cross-validation (GroupKFold)"?**
+A guard against geographic cheating when testing models: normally you test on random held-out counties, but neighboring counties are near-copies of each other, so a model can look brilliant by memorizing regions. Grouping by state forces the test to be "can you score a state you've never seen?" — a much harsher and more honest exam.
+
+**112. If your validation harness is one command, will you run it live?**
+Yes — `python3 -m src.validation.part3_tables` regenerates every Part III number from the data in the repo, on stage if you like. Offer this proactively if the room gets skeptical; nothing disarms a methods argument like recomputing the numbers in front of it.
+
+---
+
+## J. Plain-Language Glossary — Every Term You'll Say (113–130)
+
+*You will be asked "what does that mean?" about your own vocabulary. Each answer here is speakable as-is.*
+
+**113. What is a percentile?**
+A rank out of 100. A county at the 94th percentile beats 94% of all US counties. It's how we present scores because "you're in the top 6% of the country" needs no manual.
+
+**114. What is "normalization"?**
+Putting different measurements on the same ruler. Diabetes rates run 6–26%, incomes run $20k–$150k — you can't average those directly. Normalization rescales each one to 0-to-1 first, so no single measure dominates just because its numbers are bigger.
+
+**115. What is a confidence interval, like the "[−0.72, +1.07]" you quote?**
+The honest range around an estimate. Instead of pretending we measured lift as exactly +0.17, we say: given the noise, the true answer plausibly sits anywhere from −0.72 to +1.07. If that range includes zero, we refuse to claim an effect happened.
+
+**116. What does "statistically significant" mean?**
+That a result is too large to be plausibly explained by luck. By convention, we call something significant when chance alone would produce it less than 5% of the time. Not significant doesn't mean "false" — it means "we can't rule out luck yet."
+
+**117. What is a p-value?**
+The probability that pure chance would produce a result at least this strong. p = 0.014 means about a 1.4% chance it's a fluke. Small p, strong evidence.
+
+**118. What is "bootstrap"?**
+A way to measure uncertainty by resampling: shuffle-and-redraw the counties thousands of times, recompute the answer each time, and see how much it wobbles. The wobble IS the confidence interval. Ours uses 2,000 redraws.
+
+**119. What is a control group, and what is "difference-in-differences"?**
+A control group is the comparison you'd have been without the campaign — statistically similar counties that got nothing. Difference-in-differences is the arithmetic: (how much your counties improved) minus (how much their twins improved anyway). What's left over is the campaign's effect. Same logic as a drug trial's placebo arm.
+
+**120. What is "pre-registration"?**
+Locking your campaign counties AND their control twins in writing *before* launch. It prevents the oldest trick in analytics — choosing your comparison after you've seen the results. It's what makes the final number believable to a skeptic.
+
+**121. What is a "placebo test"?**
+Feeding the measurement engine a fake campaign — counties where nothing actually happened — and checking it correctly finds nothing. Ours does: +0.17 with a range crossing zero. An engine that finds lift everywhere is a liar; ours passed the lie-detector.
+
+**122. What is a ZCTA, and how is it different from a ZIP code?**
+ZIP codes are postal delivery routes; ZCTAs are the Census Bureau's map-shaped approximations of them, which is what statistics get published against. They match ~99% of the time; where they don't, our pipeline flags it. If asked, say: "we score Census ZIP-areas, the standard for ZIP-level statistics."
+
+**123. What is a FIPS code?**
+The government's ID number for each geography — every county has a unique 5-digit FIPS. When I paste "48479" into the demo, that's Webb County, Texas. It's how systems talk about places without ambiguity.
+
+**124. What is an NPI?**
+National Provider Identifier — the unique 10-digit public ID every US clinician has, assigned by the government. Our prescriber list is built on NPIs because they're unambiguous and publicly published by CMS.
+
+**125. What are BRFSS, ACS, and NHANES?**
+Three big federal surveys. BRFSS: CDC's giant annual phone survey on health behaviors — feeds our disease rates. ACS: the Census Bureau's ongoing survey of income, insurance, education — feeds our socioeconomics. NHANES: the gold standard where people get physical exams and blood tests — which is why it can catch *undiagnosed* disease, and why it's our planned ground-truth source.
+
+**126. What are Stars and HEDIS?**
+Report-card systems for insurance plans. Medicare Advantage plans get Star ratings, and higher stars mean bonus payments from the government; HEDIS is the quality scorecard behind much of it. Screening and early diagnosis improve those scores — which is why insurers will co-fund exactly the programs SPPF plans.
+
+**127. What is PHI, and why do you keep saying you have none?**
+Protected Health Information — anything traceable to an individual patient, regulated under HIPAA with heavy compliance burden. We use only statistics about places and public records about clinicians. No PHI means no HIPAA scope, no data-use agreements, and procurement in days instead of quarters.
+
+**128. What are Python, pandas, Parquet, and Streamlit — your stack slide?**
+Python: the standard programming language of data science. pandas: its spreadsheet-like data engine. Parquet: a compressed file format for tables — our entire scored America is ~25MB. Streamlit: a tool that turns Python into an interactive web dashboard. Translation for the room: boring, standard, auditable technology — chosen so any data team on earth can maintain it.
+
+**129. What is CI (continuous integration), as in "CI-gated"?**
+A robot that re-runs every test automatically on every code change and blocks anything that fails. It means quality isn't dependent on me remembering to check — the repo currently runs 44 automated tests on each change.
+
+**130. What is YAML config, as in "each condition is a config file"?**
+A plain-text settings file a human can read — disease name, data fields, weights. "New condition = new config file" means expanding to kidney disease is filling in a form, not rebuilding the engine. That's the whole expansion economics in one sentence.
