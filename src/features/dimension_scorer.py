@@ -394,7 +394,7 @@ def _dim_trajectory(df: pd.DataFrame) -> pd.DataFrame:
     High score = widening gap OR growing high-risk population = move now.
 
     Signal design (weights sum to 100):
-      T2D prevalence trend  35  — CDC PLACES YoY delta (2020→2022 data)
+      T2D prevalence trend  35  — CDC PLACES YoY delta (2020→2023 data)
                                    Real: counties where diabetes burden increased
                                    Proxy (if prior unavailable): aging + obesity
       HTN prevalence trend  20  — CDC PLACES YoY delta for hypertension
@@ -403,7 +403,7 @@ def _dim_trajectory(df: pd.DataFrame) -> pd.DataFrame:
       SDoH + rural          20  — high deprivation + rural = gap widening trend
 
     CDC PLACES prior-year data covers the PLACES 2022 release (2020 BRFSS data).
-    Current covers the PLACES 2024 release (2022 BRFSS data).
+    Current covers the PLACES 2025 release (2023 BRFSS data).
     Positive trend = prevalence growing = opportunity expanding.
     """
     score = np.zeros(len(df))

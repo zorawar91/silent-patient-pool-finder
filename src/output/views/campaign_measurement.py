@@ -143,7 +143,7 @@ def view_campaign_measurement(scores: pd.DataFrame):
     st.markdown(f"""<div style="font-size:.68rem;color:{MUTED};margin-top:.8rem;line-height:1.6;">
       <strong>Read this before quoting the number:</strong>
       Outcomes are CDC PLACES <em>diagnosed</em> prevalence between the two most
-      recent releases (~2-year spacing) — suited to multi-year campaigns, not
+      recent releases (~3-year spacing, 2020→2023 BRFSS) — suited to multi-year campaigns, not
       quarterly pulses. Matching is on observables only; pre-register the county
       and control lists before launch. PLACES model-smoothing limits power in
       small counties. Claims-data integration would tighten both the time window
