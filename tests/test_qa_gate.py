@@ -13,6 +13,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from src.features.dimension_scorer import estimate_undiagnosed_pool
 from src.quality.qa_gate import (
     COUNTY_CHECKS, CROSSWALK_CHECKS, ZCTA_CHECKS,
     QAGateError, run_gate,
@@ -51,6 +52,9 @@ def _healthy_county_scores(n=3_144) -> pd.DataFrame:
               "dim_commercial_readiness", "dim_trajectory"]:
         df[c] = RNG.normal(45, 12, n).clip(0, 100)
     df["opportunity_score"] = RNG.normal(41, 5, n).clip(0, 100)
+    df["population"] = RNG.integers(2_000, 500_000, n)
+    df["hypertension_prevalence_pct"] = RNG.normal(0.33, 0.05, n).clip(0.1, 0.6)
+    df = estimate_undiagnosed_pool(df)
     return df
 
 

@@ -16,6 +16,7 @@ from src.features.dimension_scorer import (
     DEFAULT_WEIGHTS,
     _norm,
     compute_all_dimensions,
+    estimate_undiagnosed_pool,
     load_weights,
 )
 
@@ -31,6 +32,7 @@ def _panel(n: int = 30, seed: int = 7) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
     return pd.DataFrame({
         "county_fips":                 [f"{i:05d}" for i in range(n)],
+        "population":                  rng.integers(2_000, 500_000, n),
         "diabetes_prevalence_pct":     rng.uniform(5, 18, n),
         "obesity_rate_pct":            rng.uniform(20, 45, n),
         "hypertension_prevalence_pct": rng.uniform(25, 45, n),
@@ -123,6 +125,44 @@ def test_load_weights_malformed_config_raises(tmp_path):
 def test_load_weights_real_config_sums_to_one():
     w = load_weights()
     assert abs(sum(w.values()) - 1.0) < 1e-6
+
+
+def test_compute_all_dimensions_writes_total_pool():
+    out = compute_all_dimensions(_panel())
+    assert "total_estimated_pool" in out.columns
+    assert (out["total_estimated_pool"] >= 0).all()
+    assert out["total_estimated_pool"].sum() > 0
+
+
+def test_pool_formula_and_components():
+    df = pd.DataFrame({
+        "population": [100_000, 0, 50_000],
+        "diabetes_prevalence_pct": [0.10, 0.10, 0.10],
+        "hypertension_prevalence_pct": [0.30, 0.30, 0.30],
+    })
+    out = estimate_undiagnosed_pool(df)
+    # T2D = 100000 * 0.10 * 0.231 = 2310 ; HTN = 100000*0.30*0.200 = 6000 ; Hypo = 100000*0.04*0.5 = 2000
+    assert out.loc[0, "est_pool_t2d"] == 2310
+    assert out.loc[0, "est_pool_htn"] == 6000
+    assert out.loc[0, "est_pool_hypo"] == 2000
+    assert out.loc[0, "total_estimated_pool"] == 2310 + 6000 + 2000
+    # zero population -> zero pool
+    assert out.loc[1, "total_estimated_pool"] == 0
+    # total is always the sum of components
+    assert (out["total_estimated_pool"]
+            == out[["est_pool_t2d", "est_pool_htn", "est_pool_hypo"]].sum(axis=1)).all()
+
+
+def test_pool_falls_back_to_total_population_and_handles_missing_prevalence():
+    # No 'population' col (only total_population), no HTN prevalence -> HTN contributes 0, no NaN.
+    df = pd.DataFrame({
+        "total_population": [10_000],
+        "diabetes_prevalence_pct": [0.10],
+    })
+    out = estimate_undiagnosed_pool(df)
+    assert out["total_estimated_pool"].notna().all()
+    assert out.loc[0, "est_pool_htn"] == 0
+    assert out.loc[0, "est_pool_t2d"] == 231  # 10000 * 0.10 * 0.231
 
 
 def test_norm_handles_all_nan_and_constant_series():

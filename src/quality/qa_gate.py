@@ -249,6 +249,19 @@ COUNTY_CHECKS: list[Check] = (
                        "CMS MA data degraded — payer dimension is weakened."),
         max_null_share("poverty_rate", 0.10, WARN,
                        "Census ACS coverage degraded."),
+        # The undiagnosed pool is a headline dashboard number. It once shipped
+        # missing (dashboard defaulted every county to 0) — block that silently.
+        Check(
+            "undiagnosed pool populated",
+            lambda df: ("total_estimated_pool" in df.columns
+                        and float(df["total_estimated_pool"].sum()) > 0),
+            lambda df: ("total_estimated_pool column MISSING"
+                        if "total_estimated_pool" not in df.columns
+                        else f"national pool sum = {int(df['total_estimated_pool'].sum()):,}"),
+            CRITICAL,
+            "Pool not computed — estimate_undiagnosed_pool() must run inside "
+            "compute_all_dimensions(); re-run ingest_real_data.py.",
+        ),
     ]
 )
 

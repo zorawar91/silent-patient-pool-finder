@@ -111,6 +111,9 @@ def compute_all_dimensions(
     # Data-coverage confidence grade (A/B/C) per county
     df["confidence_grade"], df["confidence_sources"] = _confidence_grade(df)
 
+    # Estimated undiagnosed patient pool (headline number in the dashboard)
+    df = estimate_undiagnosed_pool(df)
+
     log.info(
         f"Dimension scoring complete. "
         f"Priority counties: {(df['opportunity_score'] >= 55).sum()}, "
@@ -566,6 +569,50 @@ def _confidence_grade(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
     grade[present >= 4] = "B"
     grade[present >= 6] = "A"
     return grade, present
+
+
+# ── Undiagnosed Patient Pool ──────────────────────────────────────────────────
+
+# Published national undiagnosis rates (see the est_pool tooltip / methodology).
+# Kept identical to the ZIP pipeline (zip_scorer._estimate_pool) so county and
+# ZIP pool numbers reconcile.
+_UNDIAG_RATES = {"t2d": 0.231, "htn": 0.200, "hypo": 0.500}
+_HYPO_PREVALENCE = 0.04   # national hypothyroidism prevalence proxy (no county source)
+
+
+def estimate_undiagnosed_pool(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Estimated undiagnosed adults per county across T2D, HTN, and hypothyroidism.
+
+        T2D  = population × diabetes_prevalence_pct     × 0.231
+        HTN  = population × hypertension_prevalence_pct × 0.200
+        Hypo = population × 0.04                        × 0.50
+
+    Prevalence columns are fractions (0.135 = 13.5%). Writes the per-condition
+    breakdown plus `total_estimated_pool`. Missing inputs contribute 0 rather
+    than NaN, so the total is always a usable integer.
+    """
+    out = df.copy()
+
+    def _num(name: str) -> pd.Series:
+        """Numeric column as a Series, or all-zeros when the column is absent."""
+        if name in out.columns:
+            return pd.to_numeric(out[name], errors="coerce").fillna(0.0)
+        return pd.Series(0.0, index=out.index)
+
+    pop = _num("population")
+    if (pop == 0).all():          # no usable population — fall back to total_population
+        pop = _num("total_population")
+    t2d_prev = _num("diabetes_prevalence_pct")
+    htn_prev = _num("hypertension_prevalence_pct")
+
+    out["est_pool_t2d"]  = (pop * t2d_prev * _UNDIAG_RATES["t2d"]).round().astype("int64")
+    out["est_pool_htn"]  = (pop * htn_prev * _UNDIAG_RATES["htn"]).round().astype("int64")
+    out["est_pool_hypo"] = (pop * _HYPO_PREVALENCE * _UNDIAG_RATES["hypo"]).round().astype("int64")
+    out["total_estimated_pool"] = (
+        out["est_pool_t2d"] + out["est_pool_htn"] + out["est_pool_hypo"]
+    )
+    return out
 
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
