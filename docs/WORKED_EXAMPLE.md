@@ -97,7 +97,7 @@ measures and cuts downstream complication cost. Let's co-fund screening."*
 
 The same engine drops one level down: Starr's ZIPs are individually scored
 (33,791 nationally), and the prescribers practicing in them are ranked into a
-CRM-ready call list (411,115 scored, 20,612 priority) — so "invest in Starr"
+CRM-ready call list (411,115 scored, 20,585 priority) — so "invest in Starr"
 becomes "call these doctors, in this order, and here's why."
 
 ---

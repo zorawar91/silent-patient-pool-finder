@@ -77,7 +77,7 @@ present it as a computed output.)*
 
 > "And this is the part that makes it operational rather than academic: that
 > download is a CRM-ready call list. The same engine scores **411,000
-> prescribers** from public CMS data — **20,612 priority targets** — ranked by
+> prescribers** from public CMS data — **20,585 priority targets** — ranked by
 > the opportunity around their actual practice address, down to the ZIP:
 > 33,791 of them scored. County → ZIP → the doctor a rep calls Monday morning.
 > It plugs into the field force IQVIA already deploys."

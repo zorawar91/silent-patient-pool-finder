@@ -137,6 +137,98 @@ def load_manifest() -> dict | None:
         return None
 
 
+ZIP_PATH = Path("data/scored/zip_scores.parquet")
+HCP_PATH = Path("data/scored/hcp_targets.parquet")
+
+
+def verify_zip(path: Path = ZIP_PATH) -> tuple[bool, list[str]]:
+    """
+    Internal-consistency check for the ZIP layer.
+
+    The ZIP dimensions are downscaled from county scores through the Census
+    crosswalk, which lives in the gitignored data/open/ — so a fresh CI clone
+    cannot recompute them from scratch. What it CAN prove (and what catches
+    stale derived columns) is that everything the file derives from its own
+    retained inputs still holds: composite, tier, percentile, and pool.
+    """
+    if not path.exists():
+        return True, []  # optional artifact — absent is not a failure
+
+    from src.features.zip_scorer import _DIM_WEIGHTS
+
+    df = pd.read_parquet(path)
+    problems: list[str] = []
+
+    # composite = weighted sum of the 7 zip dimensions.
+    # Mirrors _composite_score() exactly: missing dims fill to a neutral 50,
+    # each dim is clipped to 0-100, and the total is clipped again.
+    if all(c in df.columns for c in _DIM_WEIGHTS):
+        want = df["zip_opportunity_score"]
+        got = sum(w * df[c].fillna(50.0).clip(0, 100) for c, w in _DIM_WEIGHTS.items())
+        got = got.clip(0, 100)
+        n_bad = int(((want - got).abs() > 1e-6).sum())
+        if n_bad:
+            problems.append(f"zip_opportunity_score: {n_bad:,} rows ≠ weighted dim sum")
+
+    # pool components and total
+    pool_parts = ["zip_t2d_pool", "zip_htn_pool", "zip_hypo_pool"]
+    if all(c in df.columns for c in pool_parts + ["zip_total_pool"]):
+        n_bad = int((df["zip_total_pool"] != df[pool_parts].sum(axis=1)).sum())
+        if n_bad:
+            problems.append(f"zip_total_pool: {n_bad:,} rows ≠ sum of components")
+
+    # tier thresholds must match the score
+    if "zip_opportunity_tier" in df.columns:
+        s = df["zip_opportunity_score"]
+        expect = pd.cut(s, bins=[0, 40, 55, 100],
+                        labels=["Developing", "Emerging", "Priority"],
+                        include_lowest=True).astype(str)
+        n_bad = int((df["zip_opportunity_tier"].astype(str) != expect).sum())
+        if n_bad:
+            problems.append(f"zip_opportunity_tier: {n_bad:,} rows disagree with score")
+
+    return (not problems), problems
+
+
+def verify_hcp(path: Path = HCP_PATH) -> tuple[bool, list[str]]:
+    """
+    Internal-consistency check for the HCP layer: the priority score must equal
+    the documented blend of its own retained component columns, and the tiers
+    must match their percentile cut-offs.
+    """
+    if not path.exists():
+        return True, []
+
+    from src.features.hcp_scorer import W_BURDEN, W_GEO, W_REACH, W_SPECIALTY
+
+    df = pd.read_parquet(path)
+    problems: list[str] = []
+
+    needed = ["geo_percentile", "reach_pctl", "burden_pctl", "specialty_fit",
+              "hcp_priority_score"]
+    if all(c in df.columns for c in needed):
+        got = (W_GEO * df["geo_percentile"]
+               + W_REACH * df["reach_pctl"]
+               + W_BURDEN * df["burden_pctl"]
+               + W_SPECIALTY * df["specialty_fit"] * 100).clip(0, 100).round(1)
+        n_bad = int(((df["hcp_priority_score"] - got).abs() > 0.05).sum())
+        if n_bad:
+            problems.append(
+                f"hcp_priority_score: {n_bad:,} rows ≠ "
+                f"{W_GEO}/{W_REACH}/{W_BURDEN}/{W_SPECIALTY} component blend")
+
+    if "hcp_tier" in df.columns:
+        q95, q75 = df["hcp_priority_score"].quantile([0.95, 0.75])
+        expect = pd.Series("Developing", index=df.index)
+        expect[df["hcp_priority_score"] >= q75] = "Emerging"
+        expect[df["hcp_priority_score"] >= q95] = "Priority"
+        n_bad = int((df["hcp_tier"].astype(str) != expect).sum())
+        if n_bad:
+            problems.append(f"hcp_tier: {n_bad:,} rows disagree with score quantiles")
+
+    return (not problems), problems
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--write-manifest", action="store_true",
@@ -147,19 +239,42 @@ def main() -> int:
     print("  DATA REPRODUCIBILITY GUARD — committed scores vs scoring code")
     print("─" * 62)
 
+    failed = False
+
     ok, problems = verify()
     if ok:
         df = pd.read_parquet(SCORES_PATH)
-        print(f"  ✅ All {len(DERIVED_COLUMNS)} derived columns reproduce exactly "
-              f"({len(df):,} counties)")
+        print(f"  ✅ county — all {len(DERIVED_COLUMNS)} derived columns reproduce "
+              f"exactly ({len(df):,} counties)")
         print(f"     content hash: {content_hash(df)}")
     else:
-        print(f"  🛑 {len(problems)} mismatch(es) — the committed parquet does NOT "
-              f"match the scoring code:")
+        failed = True
+        print(f"  🛑 county — {len(problems)} mismatch(es); the committed parquet "
+              f"does NOT match the scoring code:")
         for p in problems:
             print(f"     ✗ {p}")
         print("\n     Fix: re-run the ingestion pipeline (or, if only derived "
               "columns\n     changed, recompute and re-commit the parquet).")
+
+    for label, fn, path, remedy in [
+        ("ZIP", verify_zip, ZIP_PATH, "python3 src/ingestion/ingest_zcta_data.py"),
+        ("HCP", verify_hcp, HCP_PATH, "python3 src/ingestion/ingest_hcp_data.py"),
+    ]:
+        ok_x, probs = fn()
+        if not path.exists():
+            print(f"  ⚪ {label} — artifact not present, skipped")
+        elif ok_x:
+            n = len(pd.read_parquet(path))
+            print(f"  ✅ {label} — derived columns consistent with own inputs "
+                  f"({n:,} rows)")
+        else:
+            failed = True
+            print(f"  🛑 {label} — {len(probs)} inconsistency(ies):")
+            for p in probs:
+                print(f"     ✗ {p}")
+            print(f"     Fix: re-run {remedy}")
+
+    if failed:
         return 1
 
     if args.write_manifest:
