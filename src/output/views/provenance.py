@@ -76,6 +76,8 @@ def view_data_provenance(scores: pd.DataFrame):
     rows_html = ""
     for _, r in src_df.iterrows():
         cov = f"{r['coverage']:,}" if r["coverage"] else "—"
+        if r.get("post_fill"):
+            cov = f"≤{cov}"   # upper bound: counted after median-imputation
         cached = r["cached"] or "—"
         note = f"<br><span style='font-size:.66rem;color:{MUTED};'>{r['notes']}</span>" if r["notes"] else ""
         rows_html += (

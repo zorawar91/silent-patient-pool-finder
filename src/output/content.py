@@ -301,8 +301,12 @@ METRIC_TOOLTIPS = {
         "custom weights.",
     # ── Data Provenance ───────────────────────────────────────────────────────
     "prov_coverage":
-        "Real coverage: rows where this source's key indicator is actually observed "
-        "(non-null) — counted from the cached file on disk, not from documentation claims.",
+        "Rows where this source's key indicator is actually observed (non-null), counted "
+        "from the file on disk rather than from documentation claims. Where the raw cache "
+        "is present this is true observed coverage. A '≤' prefix means the raw cache is not "
+        "shipped in this deployment, so the count comes from the scored output AFTER "
+        "median-imputation and is an upper bound — the true observed figure is lower "
+        "(e.g. CDC PLACES observes 2,956 of 3,144 counties directly).",
     "prov_status":
         "Live = file present and readable. The QA gates below re-verify content "
         "quality on every dashboard load.",

@@ -32,6 +32,14 @@ class SourceSpec:
     dimensions: str      # which dimensions this source feeds
     url: str             # public landing page
     notes: str = ""
+    # Where this source's signal survives in the COMMITTED scored outputs, as
+    # (scored filename, column). data/open/ is gitignored — the raw caches are
+    # large and regenerable, so a deployment (Streamlit Cloud, fresh clone) has
+    # none of them. Without this, every source reported "missing" on the very
+    # page meant to prove the data is real. Counting the marker in the shipped
+    # scored artifact is both honest and more relevant: it measures how many
+    # rows actually carry this source's signal in the data being displayed.
+    scored_marker: tuple[str, str] | None = None
 
 
 SOURCE_REGISTRY: list[SourceSpec] = [
@@ -40,6 +48,7 @@ SOURCE_REGISTRY: list[SourceSpec] = [
         "cdc_places_county.parquet", "county", "diabetes_prevalence_pct",
         "Disease Burden · Diagnosis Gap",
         "https://www.cdc.gov/places/",
+        scored_marker=("dimension_scores.parquet", "diabetes_prevalence_pct"),
     ),
     SourceSpec(
         "PLACES County (prior release)", "CDC", "2022 archive (2020 BRFSS)",
@@ -47,12 +56,14 @@ SOURCE_REGISTRY: list[SourceSpec] = [
         "Trajectory (3-yr trend) · Campaign Measurement pre-period",
         "https://www.cdc.gov/places/",
         notes="Pinned archived dataset (xyst-f73f) — never the rolling ID.",
+        scored_marker=("dimension_scores.parquet", "diabetes_prev_prior"),
     ),
     SourceSpec(
         "American Community Survey (5-yr)", "US Census Bureau", "2022 5-year",
         "census_acs_2022.parquet", "county", "poverty_rate",
         "Social Determinants",
         "https://www.census.gov/programs-surveys/acs",
+        scored_marker=("dimension_scores.parquet", "poverty_rate"),
     ),
     SourceSpec(
         "MA County Penetration Report", "CMS", "monthly report",
@@ -60,12 +71,14 @@ SOURCE_REGISTRY: list[SourceSpec] = [
         "Diagnosis Gap · Payer Landscape",
         "https://www.cms.gov/data-research/statistics-trends-reports/"
         "medicare-advantagepart-d-contract-and-enrollment-data",
+        scored_marker=("dimension_scores.parquet", "ma_penetration_rate"),
     ),
     SourceSpec(
         "Health Professional Shortage Areas", "HRSA", "current designations",
         "hrsa_access.parquet", "county", None,
         "Access to Care",
         "https://data.hrsa.gov/topics/health-workforce/shortage-areas",
+        scored_marker=("dimension_scores.parquet", "hpsa_flag"),
     ),
     SourceSpec(
         "County Health Rankings", "RWJ Foundation / UWPHI", "2024-2025 analytic file",
@@ -73,24 +86,28 @@ SOURCE_REGISTRY: list[SourceSpec] = [
         "Access to Care · SDoH backup",
         "https://www.countyhealthrankings.org/",
         notes="Manual one-time download (site WAF blocks automation).",
+        scored_marker=("dimension_scores.parquet", "chr_poor_health_pct"),
     ),
     SourceSpec(
         "Food Environment Atlas", "USDA ERS", "latest release",
         "usda_food_atlas.parquet", "county", None,
         "Social Determinants (food access)",
         "https://www.ers.usda.gov/data-products/food-environment-atlas/",
+        scored_marker=("dimension_scores.parquet", "food_desert_pct"),
     ),
     SourceSpec(
         "PLACES ZCTA Data", "CDC", "2024 release",
         "cdc_places_zcta.parquet", "ZIP (ZCTA)", "diabetes_prevalence_pct",
         "ZIP-level Disease Burden · Diagnosis Gap",
         "https://www.cdc.gov/places/",
+        scored_marker=("zip_scores.parquet", "diabetes_prevalence_pct"),
     ),
     SourceSpec(
         "ACS ZCTA (5-yr)", "US Census Bureau", "2022 5-year",
         "acs_zcta.parquet", "ZIP (ZCTA)", "poverty_rate",
         "ZIP-level Social Determinants",
         "https://www.census.gov/programs-surveys/acs",
+        scored_marker=("zip_scores.parquet", "poverty_rate"),
     ),
     SourceSpec(
         "ZCTA→County Relationship File", "US Census Bureau", "2020 tabulation",
@@ -98,6 +115,7 @@ SOURCE_REGISTRY: list[SourceSpec] = [
         "ZIP↔county downscaling weights",
         "https://www.census.gov/geographies/reference-files/time-series/geo/"
         "relationship-files.html",
+        scored_marker=("zip_scores.parquet", "zip_dim_payer_landscape"),
     ),
     SourceSpec(
         "Medicare Physician & Other Practitioners", "CMS", "2024-12 release (2023 data)",
@@ -105,6 +123,7 @@ SOURCE_REGISTRY: list[SourceSpec] = [
         "HCP Targeting (panel size, specialty, panel conditions)",
         "https://data.cms.gov/provider-summary-by-type-of-service/"
         "medicare-physician-other-practitioners",
+        scored_marker=("hcp_targets.parquet", "panel_size"),
     ),
 ]
 
@@ -133,6 +152,7 @@ def build_provenance(base: Path | str = ".") -> pd.DataFrame:
             "rows": 0,
             "coverage": 0,
             "cached": None,
+            "post_fill": False,   # True when counted from imputed scored data
         }
         if path.exists():
             try:
@@ -154,6 +174,29 @@ def build_provenance(base: Path | str = ".") -> pd.DataFrame:
                 row["status"] = "✅ live"
             except Exception as e:
                 row["status"] = f"⚠️ unreadable ({type(e).__name__})"
+        elif spec.scored_marker:
+            # No raw cache (deployments don't ship data/open/). Count the
+            # source's signal where it survives — in the committed scored data
+            # this dashboard is actually reading.
+            scored_file, col = spec.scored_marker
+            scored_path = base / SCORED_DIR / scored_file
+            if scored_path.exists():
+                try:
+                    sdf = pd.read_parquet(scored_path, columns=[col])
+                    row["rows"] = len(sdf)
+                    row["coverage"] = int(sdf[col].notna().sum())
+                    row["cached"] = dt.datetime.fromtimestamp(
+                        scored_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+                    row["status"] = "✅ in scored data"
+                    row["post_fill"] = True
+                    row["notes"] = (
+                        (spec.notes + " " if spec.notes else "")
+                        + f"Raw cache not shipped here; count is rows in "
+                          f"{scored_file} POST-imputation, so it is an upper "
+                          f"bound — not raw observed coverage."
+                    )
+                except Exception as e:
+                    row["status"] = f"⚠️ unreadable ({type(e).__name__})"
         rows.append(row)
     return pd.DataFrame(rows)
 
