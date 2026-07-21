@@ -32,6 +32,12 @@ jobs:
       - name: Run test suite
         run: python -m pytest tests/ -q
 
+      # Proves the committed scores were produced by the committed code.
+      # Catches the class of drift where the parquet and the scorer disagree
+      # (e.g. a derived column silently missing or computed by older logic).
+      - name: Verify data reproducibility
+        run: python src/validation/verify_reproducible.py
+
       - name: Dashboard import check
         run: |
           python - <<'EOF'

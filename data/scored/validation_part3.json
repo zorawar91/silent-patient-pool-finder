@@ -215,8 +215,8 @@
       }
     },
     "coherence": {
-      "spearman_rho": 0.929,
-      "kendall_tau": 0.789,
+      "spearman_rho": 0.943,
+      "kendall_tau": 0.815,
       "top50_overlap": 0.84,
       "n": 3135
     }
@@ -225,34 +225,34 @@
     "chr_premature_death": {
       "geo_level": "county",
       "n": 3144,
-      "sppf_rho": 0.47,
-      "sppf_p": 2.3014271728641833e-172,
+      "sppf_rho": 0.487,
+      "sppf_p": 9.788516869378559e-187,
       "baseline_rho": -0.081,
-      "lift": 0.551
+      "lift": 0.568
     }
   },
   "III.4_incremental": {
     "sdoh_only_r2": 0.227,
-    "sdoh_plus_gap_r2": 0.426,
-    "delta_r2_gap": 0.199,
-    "full_composite_r2": 0.643,
-    "delta_r2_full_vs_sdoh": 0.416,
-    "partial_corr_gap": 0.507,
-    "partial_p": 1.955330344309394e-205,
+    "sdoh_plus_gap_r2": 0.319,
+    "delta_r2_gap": 0.092,
+    "full_composite_r2": 0.646,
+    "delta_r2_full_vs_sdoh": 0.419,
+    "partial_corr_gap": 0.345,
+    "partial_p": 1.0082587701309302e-88,
     "n": 3144
   },
   "III.5_weight_stability": {
     "pm10": {
       "draws": 2000,
-      "top20_retention_pct": 96.8,
-      "kendall_tau_vs_base": 0.98,
-      "stable_core_counties": 18
+      "top20_retention_pct": 99.4,
+      "kendall_tau_vs_base": 0.9789,
+      "stable_core_counties": 20
     },
     "pm25": {
       "draws": 2000,
-      "top20_retention_pct": 93.4,
-      "kendall_tau_vs_base": 0.95,
-      "stable_core_counties": 15
+      "top20_retention_pct": 96.3,
+      "kendall_tau_vs_base": 0.9469,
+      "stable_core_counties": 17
     }
   }
 }

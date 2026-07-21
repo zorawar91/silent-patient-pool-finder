@@ -70,29 +70,29 @@ made concrete. Now here's what public data *can* prove."
 ### Panel A · Temporal coherence
 Build the score from the **older** 2020-BRFSS vintage only, freeze it, compare
 to today's ranking.
-- **Spearman ρ = 0.93 · Kendall τ = 0.79**
+- **Spearman ρ = 0.94 · Kendall τ = 0.82**
 - **Top-50 overlap = 84%** (vs **1.6%** expected by chance) · n = 3,135
 - *Proves:* the ranking is signal, not a single-release artifact.
 
 ### Panel B · Held-out severity
 Predict a public severity measure the model **never ingests** — County Health
 Rankings *premature death* (years of life lost).
-- **Composite ρ = 0.47** (p < 10⁻¹⁷⁰) vs **−0.08** for the naive
-  population × prevalence pool ranking · **lift = +0.55** · n = 3,144
+- **Composite ρ = 0.49** (p < 10⁻¹⁷⁰) vs **−0.08** for the naive
+  population × prevalence pool ranking · **lift = +0.57** · n = 3,144
 - *Proves:* the score tracks real health severity, not internal noise.
 
 ### Panel C · Not a deprivation index
 The obvious objection: "this is just a poverty map." Test the diagnosis-gap
 dimension's *incremental* value over an SDoH-only model.
-- SDoH-only R² = 0.23 → **+ Diagnosis Gap R² = 0.43 (ΔR² = +0.20)**
-- **Partial r = 0.51** (p < 10⁻²⁰⁰) · full 7-dimension R² = 0.64 · n = 3,144
+- SDoH-only R² = 0.23 → **+ Diagnosis Gap R² = 0.32 (ΔR² = +0.09)**
+- **Partial r = 0.35** (p < 10⁻⁸⁰) · full 7-dimension R² = 0.65 · n = 3,144
 - *Proves:* the detection-gap signal adds real predictive content beyond
   deprivation.
 
 ### Panel D · Weight robustness
 Shake all seven weights and watch the top-20.
-- **±25% perturbation → 93% of the top-20 hold** (Kendall τ = 0.95, 2,000 draws)
-- ±10% → 97% hold · 18 of 20 counties stable in ≥90% of draws
+- **±25% perturbation → 96% of the top-20 hold** (Kendall τ = 0.95, 2,000 draws)
+- ±10% → 99% hold · 20 of 20 counties stable in ≥90% of draws
 - *Proves:* the decision doesn't hinge on "why 20/25/15/…?"
 
 ---
@@ -128,9 +128,9 @@ posture.
 
 | Objection | Answer |
 |---|---|
-| **"Prevalence alone predicts severity better than your composite."** | *True, and disclosed:* prevalence alone gets ρ = 0.63 on the severity measure vs our 0.47 — because prevalence is a near-sibling of severity, and we deliberately dilute it with payer, readiness, and access signal to optimize *actionability*, not severity correlation. But the gap signal isn't redundant with prevalence: controlling for prevalence, the Diagnosis Gap dimension still adds **ΔR² = +0.08** (partial r = +0.36, p < 10⁻⁹⁵). The composite carries independent signal — it's not repackaged prevalence. |
-| **"You picked the weights to get this answer."** | Panel D: ±25% weight shake, 93% of the top-20 unchanged. And it's live in the product — drag them yourself. |
-| **"Isn't this just a poverty map?"** | Panel C: ΔR² = +0.20, partial r = 0.51 for the diagnosis-gap dimension over an SDoH-only baseline. |
+| **"Prevalence alone predicts severity better than your composite."** | *True, and disclosed:* prevalence alone gets ρ = 0.63 on the severity measure vs our 0.49 — because prevalence is a near-sibling of severity, and we deliberately dilute it with payer, readiness, and access signal to optimize *actionability*, not severity correlation. But the gap signal isn't redundant with prevalence: controlling for prevalence, the Diagnosis Gap dimension still adds **ΔR² = +0.08** (partial r = +0.37, p < 10⁻¹⁰⁰). The composite carries independent signal — it's not repackaged prevalence. |
+| **"You picked the weights to get this answer."** | Panel D: ±25% weight shake, 96% of the top-20 unchanged. And it's live in the product — drag them yourself. |
+| **"Isn't this just a poverty map?"** | Panel C: ΔR² = +0.09, partial r = 0.35 (p < 10⁻⁸⁰, n = 3,144) for the diagnosis-gap dimension over an SDoH-only baseline. Smaller than a deprivation index would predict by chance — but unambiguously non-zero, and it survives controlling for prevalence too (ΔR² = +0.08). |
 | **"Your one failed test worries me."** | It should reassure you — it's the only kind of test public data can run on outcomes, it failed for a documented reason (model smoothing), and we report it rather than bury it. The pilot re-runs it on data that doesn't have that flaw. |
 | **"Why should I believe the passes if the outcome test failed?"** | The four passes test *different properties* — stability, external validity, incremental content, robustness — none of which depend on the vintage-delta signal that failed. Coherence, held-out severity, and weight stress are independent lines of evidence. |
 

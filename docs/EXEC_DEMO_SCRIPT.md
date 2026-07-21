@@ -14,7 +14,7 @@ unless explicitly labeled as one.
 ## Pre-flight checklist (5 minutes before)
 
 - [ ] `streamlit run src/output/dashboard.py` — confirm it loads on **⚡ Insights & Actions** with **no state filter**
-- [ ] Confirm header numbers: **3,144 counties · 24 Priority · 1,665 Emerging**
+- [ ] Confirm header numbers: **3,144 counties · 20 Priority · 1,416 Emerging**
 - [ ] Have this FIPS string in your clipboard manager:
       `48479, 48215, 48061, 48323, 48505, 48427, 48131, 48247`
 - [ ] Browser at 100% zoom, sidebar visible, no other tabs
@@ -42,13 +42,13 @@ present it as a computed output.)*
 **Say:**
 > "This is the whole product on one screen: 3,144 counties scored on seven
 > dimensions of public data, distilled to *where you move next*. Top of the
-> list: **Starr County, Texas — score 64, the #1 county in America** for
+> list: **Starr County, Texas — score 65, the #1 county in America** for
 > undiagnosed metabolic disease opportunity. The tool doesn't just rank it —
 > it prescribes the *program type*: payer partnership, because Starr's
 > Medicare Advantage penetration means an insurer there has a Stars-rating
 > incentive to co-fund screening."
 
-**Point at** the Top-3 cards: Starr TX · Presidio TX · Oglala Lakota SD.
+**Point at** the Top-3 cards: Starr TX · Oglala Lakota SD · Presidio TX.
 
 > "Rio Grande Valley, the border, tribal lands — exactly where epidemiology
 > says undiagnosed disease concentrates. The model has never seen a medical
@@ -116,8 +116,8 @@ into the "paste county FIPS codes" box.
 ## Beat 4 — Close and ask (7:00–8:00) · screen off or back to Insights
 
 > "What you saw is live today on all public data: validated out-of-time —
-> the ranking holds at ρ = 0.93 across data vintages, predicts an external
-> severity measure it never ingests, and survives ±25% weight shake with 93%
+> the ranking holds at ρ = 0.94 across data vintages, predicts an external
+> severity measure it never ingests, and survives ±25% weight shake with 96%
 > of the top-20 unchanged. What public data cannot do is calibrate the last
 > step — did flagged counties actually surface more diagnoses. That takes one
 > backdated claims extract we already own: one condition, two states, ninety
@@ -136,7 +136,7 @@ extract, decision in 90 days.
 |---|---|---|
 | "You picked those weights to get this answer" | 7-Dimension Analysis → weight expander | "Drag them yourself — Spearman 0.98, Starr doesn't move." |
 | "Where does the data come from?" | Data Provenance | "Eleven public sources, vintage-stamped, QA gates re-run on load — this page is the audit." |
-| "Is this just a poverty map?" | (no view needed) | "We tested that: the Diagnosis Gap dimension adds ΔR² = +0.20 beyond deprivation alone, partial r = 0.51." |
+| "Is this just a poverty map?" | (no view needed) | "We tested that: the Diagnosis Gap dimension adds ΔR² = +0.09 beyond deprivation alone, partial r = 0.35, p < 10⁻⁸⁰." |
 | "Who exactly does a rep call?" | HCP Targeting | "Ranked call list with a written rationale per prescriber — public CMS data, no PHI." |
 | "Counties are too coarse" | ZIP & Territory | "33,791 ZIPs; paste your own territory and get its scorecard." |
 | "Which payer do we approach?" | Payer Landscape | "MA penetration is real CMS data; the quadrant chart names the conversation." |

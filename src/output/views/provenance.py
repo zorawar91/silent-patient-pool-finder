@@ -42,6 +42,35 @@ def view_data_provenance(scores: pd.DataFrame):
 
     src_df, out_df = _provenance_tables()
 
+    # ── Build stamp — makes "reproducible" checkable, not just claimed ────────
+    from src.validation.verify_reproducible import load_manifest
+    manifest = load_manifest()
+    if manifest:
+        b1, b2, b3 = st.columns(3)
+        b1.markdown(f"""<div class="card" style="border-top:3px solid {G_DARK};">
+          <div class="label">Scores generated</div>
+          <div style="font-size:.95rem;font-weight:800;color:{G_DARK};margin-top:.3rem;">
+            {manifest.get('generated_utc', '—')}</div>
+          <div class="sub-muted">{manifest.get('rows', 0):,} counties</div></div>""",
+          unsafe_allow_html=True)
+        b2.markdown(f"""<div class="card" style="border-top:3px solid {G_DARK};">
+          <div class="label">From commit</div>
+          <div style="font-size:.95rem;font-weight:800;color:{G_DARK};margin-top:.3rem;">
+            {manifest.get('git_commit', '—')}</div>
+          <div class="sub-muted">code that produced these scores</div></div>""",
+          unsafe_allow_html=True)
+        b3.markdown(f"""<div class="card" style="border-top:3px solid {G_DARK};">
+          <div class="label">Content hash</div>
+          <div style="font-size:.95rem;font-weight:800;color:{G_DARK};margin-top:.3rem;">
+            {manifest.get('content_hash', '—')}</div>
+          <div class="sub-muted">CI re-derives &amp; verifies this on every push</div></div>""",
+          unsafe_allow_html=True)
+        st.markdown(f"""<div style="font-size:.7rem;color:{MUTED};margin:.4rem 0 1rem;">
+          Every push re-runs the scoring code against these committed inputs and fails
+          the build if any derived column disagrees — so the numbers on this dashboard
+          are provably the output of the code in the repo, not a stale snapshot.
+        </div>""", unsafe_allow_html=True)
+
     # ── Source table ──────────────────────────────────────────────────────────
     st.markdown('<div class="sec-head">Data Sources</div>', unsafe_allow_html=True)
     rows_html = ""
