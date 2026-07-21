@@ -1,0 +1,79 @@
+{
+  "acs_zcta.parquet": {
+    "cache_mtime": "2026-07-05 14:14",
+    "captured_utc": "2026-07-21 10:32:58 UTC",
+    "marker": "poverty_rate",
+    "observed": 33774,
+    "rows": 33774
+  },
+  "cdc_places_county.parquet": {
+    "cache_mtime": "2026-07-04 20:14",
+    "captured_utc": "2026-07-21 10:32:58 UTC",
+    "marker": "diabetes_prevalence_pct",
+    "observed": 2956,
+    "rows": 2956
+  },
+  "cdc_places_prior.parquet": {
+    "cache_mtime": "2026-07-10 09:23",
+    "captured_utc": "2026-07-21 10:32:58 UTC",
+    "marker": null,
+    "observed": 3143,
+    "rows": 3143
+  },
+  "cdc_places_zcta.parquet": {
+    "cache_mtime": "2026-07-05 14:13",
+    "captured_utc": "2026-07-21 10:32:58 UTC",
+    "marker": "diabetes_prevalence_pct",
+    "observed": 29983,
+    "rows": 29983
+  },
+  "census_acs_2022.parquet": {
+    "cache_mtime": "2026-07-05 08:44",
+    "captured_utc": "2026-07-21 10:32:58 UTC",
+    "marker": "poverty_rate",
+    "observed": 3222,
+    "rows": 3222
+  },
+  "cms_gv_puf_county.parquet": {
+    "cache_mtime": "2026-07-08 23:32",
+    "captured_utc": "2026-07-21 10:32:58 UTC",
+    "marker": "ma_penetration_rate",
+    "observed": 3108,
+    "rows": 3128
+  },
+  "cms_providers.parquet": {
+    "cache_mtime": "2026-07-09 10:25",
+    "captured_utc": "2026-07-21 10:32:58 UTC",
+    "marker": "Tot_Benes",
+    "observed": 534396,
+    "rows": 534396
+  },
+  "county_health_rankings.parquet": {
+    "cache_mtime": "2026-07-05 09:34",
+    "captured_utc": "2026-07-21 10:32:58 UTC",
+    "marker": null,
+    "observed": 3152,
+    "rows": 3152
+  },
+  "hrsa_access.parquet": {
+    "cache_mtime": "2026-07-05 09:24",
+    "captured_utc": "2026-07-21 10:32:58 UTC",
+    "marker": null,
+    "observed": 3233,
+    "rows": 3233
+  },
+  "usda_food_atlas.parquet": {
+    "cache_mtime": "2026-07-05 13:23",
+    "captured_utc": "2026-07-21 10:32:58 UTC",
+    "marker": null,
+    "observed": 3143,
+    "rows": 3143
+  },
+  "zcta_county_crosswalk.parquet": {
+    "cache_mtime": "2026-07-08 18:43",
+    "captured_utc": "2026-07-21 10:32:58 UTC",
+    "marker": null,
+    "observed": 46690,
+    "rows": 46690
+  }
+}

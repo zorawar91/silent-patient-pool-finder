@@ -140,6 +140,15 @@ def main():
                       (dim_scores["opportunity_score"] < 55)).sum())
     developing = int((dim_scores["opportunity_score"] < 40).sum())
 
+    # Record observed source coverage while the raw caches are on disk, so a
+    # deployment (which never receives data/open/) can still report exact
+    # coverage on the provenance page instead of a post-imputation upper bound.
+    try:
+        from src.quality.provenance import capture_source_coverage
+        capture_source_coverage()
+    except Exception as exc:          # never fail an ingest over provenance
+        log.warning("Could not capture source coverage: %s", exc)
+
     log.info("\n" + "=" * 62)
     log.info("  INGESTION COMPLETE")
     log.info(f"  Elapsed:           {time.time() - t0:.0f}s")

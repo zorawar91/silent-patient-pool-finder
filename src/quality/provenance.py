@@ -12,6 +12,7 @@ from, not what the pipeline aspires to download.
 """
 
 import datetime as dt
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -137,6 +138,7 @@ OUTPUT_REGISTRY = [
 def build_provenance(base: Path | str = ".") -> pd.DataFrame:
     """One row per registered source, computed from files on disk."""
     base = Path(base)
+    _coverage = load_source_coverage(base)
     rows = []
     for spec in SOURCE_REGISTRY:
         path = base / OPEN_DIR / spec.filename
@@ -174,6 +176,18 @@ def build_provenance(base: Path | str = ".") -> pd.DataFrame:
                 row["status"] = "✅ live"
             except Exception as e:
                 row["status"] = f"⚠️ unreadable ({type(e).__name__})"
+        elif spec.filename in _coverage:
+            # Exact observed coverage captured at ingest time and committed.
+            entry = _coverage[spec.filename]
+            row["rows"] = int(entry.get("rows", 0))
+            row["coverage"] = int(entry.get("observed", 0))
+            row["cached"] = entry.get("cache_mtime")
+            row["status"] = "✅ observed"
+            row["notes"] = (
+                (spec.notes + " " if spec.notes else "")
+                + f"Raw cache not shipped here; coverage recorded at ingest "
+                  f"({entry.get('captured_utc', 'unknown')})."
+            )
         elif spec.scored_marker:
             # No raw cache (deployments don't ship data/open/). Count the
             # source's signal where it survives — in the committed scored data
@@ -224,6 +238,60 @@ def build_output_provenance(base: Path | str = ".") -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+# ── Observed-coverage manifest ────────────────────────────────────────────────
+# Captured at ingest time, while the raw caches are on disk, and committed (a
+# few hundred bytes). Lets a deployment report EXACT observed coverage instead
+# of the post-imputation upper bound, without shipping the caches themselves.
+COVERAGE_MANIFEST = SCORED_DIR / "source_coverage.json"
+
+
+def capture_source_coverage(base: Path | str = ".") -> dict:
+    """
+    Record observed coverage for every source whose raw cache is present.
+
+    Merges into any existing manifest rather than replacing it, so running one
+    pipeline (e.g. ZCTA) doesn't erase entries captured by another (county/HCP).
+    Each entry carries the cache's own mtime, so staleness is detectable.
+    """
+    base = Path(base)
+    manifest = load_source_coverage(base)
+    captured = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    for spec in SOURCE_REGISTRY:
+        path = base / OPEN_DIR / spec.filename
+        if not path.exists():
+            continue
+        try:
+            df = pd.read_parquet(path)
+        except Exception:
+            continue
+        marker_col = None
+        if spec.marker:
+            marker_col = next(
+                (c for c in df.columns if c.lower() == spec.marker.lower()), None)
+        manifest[spec.filename] = {
+            "rows": int(len(df)),
+            "observed": int(df[marker_col].notna().sum()) if marker_col else int(len(df)),
+            "marker": marker_col,
+            "cache_mtime": dt.datetime.fromtimestamp(
+                path.stat().st_mtime).strftime("%Y-%m-%d %H:%M"),
+            "captured_utc": captured,
+        }
+
+    out = base / COVERAGE_MANIFEST
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    return manifest
+
+
+def load_source_coverage(base: Path | str = ".") -> dict:
+    """Read the committed coverage manifest, or {} when absent/unreadable."""
+    try:
+        return json.loads((Path(base) / COVERAGE_MANIFEST).read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
 def run_all_gates(base: Path | str = ".") -> list:
     """Run every applicable QA gate against outputs on disk.
     Returns list of (gate_name, GateReport)."""
@@ -248,3 +316,12 @@ def run_all_gates(base: Path | str = ".") -> list:
         except Exception:
             continue
     return reports
+
+
+if __name__ == "__main__":
+    # Capture observed coverage while the raw caches are on disk:
+    #   python3 -m src.quality.provenance
+    m = capture_source_coverage()
+    print(f"Captured observed coverage for {len(m)} source(s) → {COVERAGE_MANIFEST}")
+    for fn, e in sorted(m.items()):
+        print(f"  {fn:34s} {e['observed']:>7,} / {e['rows']:>7,} observed")

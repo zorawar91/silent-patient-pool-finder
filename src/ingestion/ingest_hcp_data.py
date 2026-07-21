@@ -124,6 +124,15 @@ def main():
     targets.to_parquet(out_pq, index=False)
     targets.head(50_000).to_csv(out_csv, index=False)   # CRM-loadable slice
 
+    # Record observed source coverage while the raw caches are on disk, so a
+    # deployment (which never receives data/open/) can still report exact
+    # coverage on the provenance page instead of a post-imputation upper bound.
+    try:
+        from src.quality.provenance import capture_source_coverage
+        capture_source_coverage()
+    except Exception as exc:          # never fail an ingest over provenance
+        log.warning("Could not capture source coverage: %s", exc)
+
     log.info("\n" + "=" * 62)
     log.info("  HCP INGESTION COMPLETE")
     log.info(f"  Elapsed:        {time.time() - t0:.0f}s")
