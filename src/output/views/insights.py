@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from src.output.content import METRIC_TOOLTIPS
-from src.output.data import _ensure_dims, _ensure_payer, _opp_score
+from src.output.data import _ensure_dims, _ensure_payer, _opp_score, condition_score
 from src.output.theme import (
     AMBER, BLUE, BORDER, DARK, G_DARK, G_MID, G_PALE, INTERV_META, MUTED,
     PURPLE, RED, STATE_ABBREV, _iicon,
@@ -23,6 +23,9 @@ def view_insights(scores: pd.DataFrame, scores_long: pd.DataFrame,
     scores = _ensure_dims(scores)
     scores, _ = _ensure_payer(scores)
     opp_col = _opp_score(scores)
+    # Rank by the condition the user selected; tiers stay on the composite
+    # (the tier badge is explicitly an overall-opportunity classification).
+    scores, rank_col = condition_score(scores, condition)
 
     # Apply state filter
     filtered = scores.copy()
@@ -38,7 +41,7 @@ def view_insights(scores: pd.DataFrame, scores_long: pd.DataFrame,
     )
 
     # ── Pre-compute key insight figures ──────────────────────────────────────
-    all_sorted = filtered.sort_values(opp_col, ascending=False)
+    all_sorted = filtered.sort_values(rank_col, ascending=False)
     priority   = filtered[filtered[opp_col] >= 55].sort_values(opp_col, ascending=False)
     top3       = all_sorted.head(3)
 
@@ -59,13 +62,13 @@ def view_insights(scores: pd.DataFrame, scores_long: pd.DataFrame,
         best_payer_county = base_pool.iloc[0]
 
     # Counterintuitive find = top-quintile score but small estimated pool
-    score_threshold = all_sorted[opp_col].quantile(0.80)
+    score_threshold = all_sorted[rank_col].quantile(0.80)
     if "total_estimated_pool" in filtered.columns:
         pop_threshold   = filtered["total_estimated_pool"].quantile(0.40)
         surprise_pool   = filtered[
-            (filtered[opp_col] >= score_threshold) &
+            (filtered[rank_col] >= score_threshold) &
             (filtered["total_estimated_pool"] <= pop_threshold)
-        ].sort_values(opp_col, ascending=False)
+        ].sort_values(rank_col, ascending=False)
         surprise = (surprise_pool.iloc[0] if len(surprise_pool) > 0
                     else all_sorted.iloc[min(5, len(all_sorted)-1)])
     else:
@@ -96,12 +99,12 @@ def view_insights(scores: pd.DataFrame, scores_long: pd.DataFrame,
     # ── Top 3 Action Counties ─────────────────────────────────────────────────
     st.markdown(f"""<div class='ch'>
       <div class='sec-head'>🎯 Top 3 Counties to Act On Now {_iicon(METRIC_TOOLTIPS["opportunity_score"], pos="")}</div>
-      <div class='sec-sub'>Highest composite opportunity scores in current filter — these are your first calls</div>
+      <div class='sec-sub'>Highest {'composite opportunity' if condition == 'overall' else cond_label + ' risk'} scores in current filter — these are your first calls</div>
     </div>""", unsafe_allow_html=True)
 
     c1, c2, c3 = st.columns(3)
     for col_ui, (_, row) in zip([c1, c2, c3], top3.iterrows()):
-        opp    = row.get(opp_col, 0)
+        opp    = row.get(rank_col, 0)   # the score actually being ranked on
         pool   = int(row.get("total_estimated_pool", 0))
         interv = str(row.get("recommended_intervention", "Pharmacy-Based Screening"))
         imeta  = INTERV_META.get(interv, {"color": G_MID, "icon": "💊", "desc": interv})

@@ -8,7 +8,7 @@ import streamlit as st
 
 from src.output.content import METRIC_TOOLTIPS
 from src.output.data import (
-    _cond_proxy, _ensure_dims, _get_intervention, _opp_score,
+    _cond_proxy, _ensure_dims, _get_intervention, _opp_score, condition_score,
 )
 from src.output.theme import (
     AMBER, BG, BORDER, COND_META, DARK, G_DARK, G_LIGHT, G_PALE, MUTED,
@@ -20,9 +20,8 @@ def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
                     condition: str, state: str, geojson):
     scores    = _ensure_dims(scores)
     opp_col   = _opp_score(scores)
-    score_col = "overall_risk_score" if condition == "overall" else f"{condition}_risk_score"
-    if score_col not in scores.columns:
-        score_col = opp_col
+    # Condition-aware score — drives the map colour, not just a label.
+    scores, score_col = condition_score(scores, condition)
     filtered  = scores.copy()
     if state:
         filtered = filtered[filtered["state_name"].isin(state)]
@@ -42,7 +41,7 @@ def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
     col_map, col_right = st.columns([2.8, 1])
 
     with col_map:
-        st.markdown(f'<div class="card"><div class="sec-head">Opportunity Map — {cond_label}{_iicon(METRIC_TOOLTIPS["opp_map"])}</div><div class="sec-sub">Shading = composite opportunity score. Hover for county profile.</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="card"><div class="sec-head">Opportunity Map — {cond_label}{_iicon(METRIC_TOOLTIPS["opp_map"])}</div><div class="sec-sub">Shading = {"composite opportunity score" if condition == "overall" else cond_label + " risk score"}. Hover for county profile.</div>', unsafe_allow_html=True)
 
         # Build intervention mapping
         if "recommended_intervention" not in filtered.columns:
@@ -57,29 +56,49 @@ def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
             map_data = filtered.copy()
 
         if geojson:
-            hover_extra = {opp_col: ":.0f", score_col: ":.0f",
-                           "recommended_intervention": True, "county_fips": False}
+            is_overall = (score_col == opp_col)
+            hover_extra = {opp_col: ":.0f", "recommended_intervention": True,
+                           "county_fips": False}
+            if not is_overall:
+                hover_extra[score_col] = ":.0f"
             if "opportunity_tier" in map_data.columns:
                 hover_extra["opportunity_tier"] = True
 
-            # Color scale anchored to actual score range (~25–65).
-            # Matches tier thresholds: grey = Developing, amber = Emerging, red = Priority.
+            # Colour by whatever the Condition filter selected. For the composite
+            # the scale is anchored to its tier thresholds (25/40/55); a
+            # per-condition score has a different spread, so the scale follows
+            # its own 5th–95th percentile instead of clipping to the composite's.
+            if is_overall:
+                rng, cbar = (25, 65), dict(
+                    title="Opp.<br>Score",
+                    tickvals=[25, 40, 55, 65],
+                    ticktext=["25<br><i>Developing</i>", "40<br><i>Emerging</i>",
+                              "55<br><i>Priority</i>", "65"],
+                )
+            else:
+                lo = float(map_data[score_col].quantile(0.05))
+                hi = float(map_data[score_col].quantile(0.95))
+                rng, cbar = (round(lo), round(hi)), dict(
+                    title=f"{cond_label}<br>Risk Score",
+                    tickvals=[round(lo), round((lo + hi) / 2), round(hi)],
+                )
+
             fig = px.choropleth(
                 map_data,
                 geojson=geojson,
                 locations="county_fips",
-                color=opp_col,
+                color=score_col,
                 color_continuous_scale=[
-                    [0.00, "#EEF2F7"],   # Developing low end
-                    [0.50, "#F4A261"],   # Emerging (score ≈ 45)
-                    [0.85, "#E63946"],   # Priority threshold (score ≈ 55)
-                    [1.00, "#8B0000"],   # Top priority counties
+                    [0.00, "#EEF2F7"],   # low end
+                    [0.50, "#F4A261"],   # mid
+                    [0.85, "#E63946"],   # high
+                    [1.00, "#8B0000"],   # top
                 ],
-                range_color=(25, 65),
+                range_color=rng,
                 scope="usa",
                 hover_name="county_name",
                 hover_data={"state_name": True, "population": ":,", **hover_extra},
-                labels={opp_col: "Opp. Score", score_col: "Risk Score",
+                labels={opp_col: "Opp. Score", score_col: f"{cond_label} Risk",
                         "recommended_intervention": "Program", "opportunity_tier": "Tier"},
             )
             fig.update_layout(
@@ -87,27 +106,23 @@ def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
                 paper_bgcolor="white",
                 geo=dict(bgcolor="white", lakecolor="#EBF5FB", landcolor=BG),
                 coloraxis_colorbar=dict(
-                    title="Opp.<br>Score",
-                    tickvals=[25, 40, 55, 65],
-                    ticktext=["25<br><i>Developing</i>", "40<br><i>Emerging</i>",
-                              "55<br><i>Priority</i>", "65"],
                     thickness=12, len=0.65, bgcolor="white",
-                    bordercolor=BORDER, borderwidth=1,
+                    bordercolor=BORDER, borderwidth=1, **cbar,
                 ),
                 height=480,
             )
-            _stplot(fig, width="stretch")
+            _stplot(fig, use_container_width=True)
         else:
             st.info("County boundary map unavailable (GeoJSON download failed) — "
                     "showing state averages instead. It will retry on the next reload.")
-            state_avg = (filtered.groupby("state_name")[opp_col].mean()
-                         .reset_index().sort_values(opp_col, ascending=False).head(20))
-            fig = px.bar(state_avg, x="state_name", y=opp_col,
-                         color=opp_col, color_continuous_scale=[[0,G_PALE],[1,G_DARK]],
+            state_avg = (filtered.groupby("state_name")[score_col].mean()
+                         .reset_index().sort_values(score_col, ascending=False).head(20))
+            fig = px.bar(state_avg, x="state_name", y=score_col,
+                         color=score_col, color_continuous_scale=[[0,G_PALE],[1,G_DARK]],
                          labels={"state_name":"","opportunity_score":"Avg Opportunity Score"})
             fig.update_layout(plot_bgcolor="white", paper_bgcolor="white",
                                margin=dict(l=0,r=0,t=10,b=0), height=480, coloraxis_showscale=False)
-            _stplot(fig, width="stretch")
+            _stplot(fig, use_container_width=True)
 
         st.markdown('</div>', unsafe_allow_html=True)
 

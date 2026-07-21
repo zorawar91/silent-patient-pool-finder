@@ -140,6 +140,32 @@ def _cond_proxy(df: pd.DataFrame, ckey: str) -> pd.Series:
     return result if result is not None else df[opp_col]
 
 
+def condition_score(df: pd.DataFrame, condition: str) -> tuple[pd.DataFrame, str]:
+    """
+    Resolve the score column that the sidebar's Condition filter selects.
+
+    'overall'            → the composite opportunity score.
+    a specific condition → the legacy `{cond}_risk_score` column when it exists
+                           (old synthetic ML pipeline), otherwise a materialised
+                           per-condition blend of the dimension scores.
+
+    The real-data pipeline produces NO `*_risk_score` columns, so views that
+    looked one up silently fell back to the composite — which made the Condition
+    filter a no-op everywhere. Going through this helper keeps the filter live.
+
+    Returns (df, column_name); df may gain the computed column.
+    """
+    if condition == "overall":
+        return df, _opp_score(df)
+    legacy = f"{condition}_risk_score"
+    if legacy in df.columns:
+        return df, legacy
+    out = df.copy()
+    col = f"_cond_score_{condition}"
+    out[col] = _cond_proxy(df, condition)
+    return out, col
+
+
 def _has_dims(df: pd.DataFrame) -> bool:
     return "dim_disease_burden" in df.columns
 

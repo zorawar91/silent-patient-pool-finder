@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.output.content import METRIC_TOOLTIPS
-from src.output.data import _ensure_dims, _opp_score
+from src.output.data import _ensure_dims, _opp_score, condition_score
 from src.output.theme import (
     AMBER, BORDER, COND_META, DARK, DIM_COLORS, DIM_ICONS, DIM_LABELS,
     G_DARK, G_LIGHT, G_MID, G_PALE, INTERV_META, MUTED, RED,
@@ -102,9 +102,7 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
                           state: list, county: str, top_n: int):
     scores    = _ensure_dims(scores)
     opp_col   = _opp_score(scores)
-    score_col = "overall_risk_score" if condition == "overall" else f"{condition}_risk_score"
-    if score_col not in scores.columns:
-        score_col = opp_col
+    scores, score_col = condition_score(scores, condition)
 
     # ── Prompt if no state selected ───────────────────────────────────────────
     if not state:
@@ -221,7 +219,7 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
                        title="Opportunity Score"),
             yaxis=dict(tickfont=dict(size=10)),
         )
-        _stplot(fig, width="stretch")
+        _stplot(fig, use_container_width=True)
 
     with col_right:
         # Tier donut
@@ -237,7 +235,7 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
             ))
             fig2.update_layout(margin=dict(l=0,r=0,t=0,b=0), height=190,
                                paper_bgcolor="white", showlegend=False)
-            _stplot(fig2, width="stretch")
+            _stplot(fig2, use_container_width=True)
 
         st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
 

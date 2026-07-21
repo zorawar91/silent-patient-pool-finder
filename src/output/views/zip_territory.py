@@ -156,7 +156,7 @@ def _render_zip_map(df: pd.DataFrame, score_col: str):
             bgcolor="white",
         ),
     )
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
     st.markdown(f"""<div style="font-size:.71rem;color:{MUTED};margin-top:-.5rem;">
       {len(plot_df):,} ZCTAs shown · sized by estimated undiagnosed pool · colored by Opportunity Score
@@ -264,7 +264,7 @@ def _render_territory_builder(df: pd.DataFrame, score_col: str, county_scores: p
                 margin=dict(l=20, r=20, t=30, b=20), height=260,
                 paper_bgcolor="white",
             )
-            _stplot(fig_r, width="stretch")
+            _stplot(fig_r, use_container_width=True)
 
     if "zip_recommended_intervention" in territory.columns:
         with col_interv:

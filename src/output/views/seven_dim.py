@@ -9,7 +9,7 @@ import streamlit as st
 
 from src.features.dimension_scorer import load_weights, rank_stability, recompute_composite
 from src.output.content import DIM_TOOLTIPS, METRIC_TOOLTIPS
-from src.output.data import _ensure_dims, _has_dims, _opp_score
+from src.output.data import _ensure_dims, _has_dims, condition_score
 from src.output.theme import (
     BLUE, BORDER, DARK, DIM_COLORS, DIM_ICONS, DIM_LABELS, DIM_SHORT,
     G_DARK, MUTED, STATE_ABBREV, _iicon, _stplot,
@@ -29,10 +29,7 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
                 "Run `python3 src/ingestion/ingest_real_data.py` to load full open-data scores "
                 "(CDC PLACES, Census ACS, HRSA, CMS).")
 
-    opp_col   = _opp_score(scores)
-    score_col = "overall_risk_score" if condition == "overall" else f"{condition}_risk_score"
-    if score_col not in scores.columns:
-        score_col = opp_col
+    scores, score_col = condition_score(scores, condition)
     sort_col  = score_col
 
     filtered = scores.copy()
@@ -83,7 +80,7 @@ def view_7d_analysis(scores: pd.DataFrame, state: str, top_n: int,
             margin=dict(l=30,r=30,t=30,b=50), height=360,
             paper_bgcolor="rgba(0,0,0,0)",
         )
-        _stplot(fig, width="stretch")
+        _stplot(fig, use_container_width=True)
 
     with col_bars:
         # Build all bars in ONE markdown call so the card wrapper encloses its content

@@ -32,6 +32,23 @@ AUDIT_VIEWS = [
 _DECISION_KEY = "_nav_decision"
 _AUDIT_KEY = "_nav_audit"
 
+# Which sidebar filters each view actually consumes. Anything not listed is
+# greyed out for that view rather than silently ignored — a control that looks
+# live but changes nothing is worse than no control at all.
+VIEW_FILTERS: dict[str, set[str]] = {
+    "Insights & Actions":      {"condition", "state"},
+    "Investment Planner":      {"condition", "state", "top_n", "tier"},
+    "Geographic Intelligence": {"condition", "state"},
+    "Market Overview":         {"condition"},
+    "7-Dimension Analysis":    {"condition", "state", "top_n"},
+    "State Drill-Down":        {"condition", "state", "county"},
+    "Payer Landscape":         {"state", "top_n"},
+    "ZIP & Territory":         {"state"},
+    "HCP Targeting":           {"state"},
+    "Campaign Measurement":    set(),   # has its own in-view county pickers
+    "Data Provenance":         set(),   # nothing to filter
+}
+
 
 def _pick_decision():
     # Picking a decision view clears the audit selection (mutual exclusion).
@@ -80,19 +97,35 @@ def render_sidebar(scores: pd.DataFrame) -> dict:
 
         st.markdown("---")
 
+        view_name = active.split("  ")[1]
+        applies = VIEW_FILTERS.get(view_name, set())
+
+        def _off(name: str) -> bool:
+            """True when this filter has no effect on the current view."""
+            return name not in applies
+
+        if not applies:
+            st.caption("This view has no sidebar filters — its controls are in the page.")
+        else:
+            st.caption("Greyed-out filters don't apply to this view.")
+
         # ── Condition filter ──────────────────────────────────────────────────
         st.markdown(f"""
         <div class='label' style='margin-bottom:.2rem;'>Condition (Risk Score)</div>
         <div style='font-size:.64rem;color:{MUTED};margin-bottom:.4rem;line-height:1.5;'>
-          Affects risk score column across all views.<br>
+          Ranks and shades by the selected condition.<br>
           Opportunity Score is always multi-condition.
         </div>""", unsafe_allow_html=True)
 
         cond_opts = {"All Conditions": "overall", "🩸 Type 2 Diabetes": "t2d",
                      "❤️ Hypertension": "htn", "🦋 Hypothyroidism": "hyperthyroidism"}
         cond_label = st.selectbox("Condition", list(cond_opts.keys()),
-                                  label_visibility="collapsed")
+                                  label_visibility="collapsed",
+                                  disabled=_off("condition"))
         condition  = cond_opts[cond_label]
+        # A disabled filter must not leak into the view's logic.
+        if _off("condition"):
+            condition, cond_label = "overall", "All Conditions"
 
         # ── Geography filters ─────────────────────────────────────────────────
         st.markdown("<div class='label' style='margin-top:.7rem;margin-bottom:.3rem;'>Geography</div>",
@@ -103,11 +136,14 @@ def render_sidebar(scores: pd.DataFrame) -> dict:
             "States", state_list,
             placeholder="All states (no filter)",
             label_visibility="collapsed",
+            disabled=_off("state"),
         )
+        if _off("state"):
+            state = []
 
         # County dropdown only when exactly one state is selected
         county = "All Counties"
-        if len(state) == 1:
+        if "county" in applies and len(state) == 1:
             state_counties = ["All Counties"] + sorted(
                 scores[scores["state_name"] == state[0]]["county_name"].unique().tolist()
             )
@@ -119,10 +155,14 @@ def render_sidebar(scores: pd.DataFrame) -> dict:
         st.markdown("<div class='label' style='margin-top:.7rem;margin-bottom:.3rem;'>Display</div>",
                     unsafe_allow_html=True)
 
-        top_n = st.slider("Top N counties", 10, 50, 20, step=5)
+        top_n = st.slider("Top N counties", 10, 50, 20, step=5,
+                          disabled=_off("top_n"))
 
         tier_opts = ["All Tiers", "Priority", "Emerging", "Developing"]
-        tier_filter = st.selectbox("Opportunity Tier", tier_opts)
+        tier_filter = st.selectbox("Opportunity Tier", tier_opts,
+                                   disabled=_off("tier"))
+        if _off("tier"):
+            tier_filter = "All Tiers"
 
         st.markdown("---")
         st.markdown(f"""<div style="font-size:.68rem;color:{MUTED};line-height:1.6;">
@@ -133,7 +173,7 @@ def render_sidebar(scores: pd.DataFrame) -> dict:
         </div>""", unsafe_allow_html=True)
 
     return {
-        "view": active.split("  ")[1],
+        "view": view_name,
         "condition": condition,
         "cond_label": cond_label,
         "state": state,

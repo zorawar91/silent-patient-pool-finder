@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.output.content import METRIC_TOOLTIPS
-from src.output.data import _ensure_dims, _get_intervention, _has_dims, _opp_score
+from src.output.data import _ensure_dims, _get_intervention, _has_dims, _opp_score, condition_score
 from src.output.theme import (
     BORDER, COND_META, DARK, DIM_COLORS, DIM_LABELS, G_DARK, G_MID,
     INTERV_META, MUTED, _iicon, _score_bar, _stplot, _tier_pill,
@@ -18,9 +18,7 @@ def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
                              condition: str, state: str, top_n: int, tier_filter: str):
     scores = _ensure_dims(scores)
     opp_col = _opp_score(scores)
-    score_col = "overall_risk_score" if condition == "overall" else f"{condition}_risk_score"
-    if score_col not in scores.columns:
-        score_col = opp_col
+    scores, score_col = condition_score(scores, condition)
 
     # Build intervention column
     if "recommended_intervention" not in scores.columns:
@@ -82,7 +80,7 @@ def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
             plot_bgcolor="white", paper_bgcolor="white",
             margin=dict(l=0, r=40, t=10, b=30), height=280,
         )
-        _stplot(fig, width="stretch")
+        _stplot(fig, use_container_width=True)
 
         for _, prow in prog_counts.iterrows():
             meta = INTERV_META.get(str(prow["program"]), {"color":G_MID,"icon":"•","desc":""})
@@ -132,7 +130,7 @@ def view_investment_planner(scores: pd.DataFrame, scores_long: pd.DataFrame,
             plot_bgcolor="white", paper_bgcolor="white",
             margin=dict(l=0, r=40, t=20, b=80), height=280,
         )
-        _stplot(fig2, width="stretch")
+        _stplot(fig2, use_container_width=True)
         st.markdown(f'<div style="font-size:.7rem;color:{MUTED};margin-top:.5rem;">⚠️ Yield figures based on published screening program literature. Actual results vary by market.</div>', unsafe_allow_html=True)
 
     st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)

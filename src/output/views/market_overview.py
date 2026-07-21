@@ -9,6 +9,7 @@ import streamlit as st
 
 from src.output.content import METRIC_TOOLTIPS
 from src.output.data import (
+    condition_score,
     _cond_proxy, _ensure_dims, _get_intervention, _opp_score,
 )
 from src.output.theme import (
@@ -21,9 +22,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
                           condition: str = "overall", cond_label: str = "All Conditions"):
     scores  = _ensure_dims(scores)
     opp_col = _opp_score(scores)
-    score_col = "overall_risk_score" if condition == "overall" else f"{condition}_risk_score"
-    if score_col not in scores.columns:
-        score_col = opp_col
+    scores, score_col = condition_score(scores, condition)
     total_pool = int(scores["total_estimated_pool"].sum()) if "total_estimated_pool" in scores.columns else 45_700_000
     priority_n = int((scores[opp_col] >= 55).sum())
     emerging_n = int(((scores[opp_col] >= 40) & (scores[opp_col] < 55)).sum())
@@ -123,7 +122,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
             bargap=0.05,
             margin=dict(l=0, r=0, t=20, b=30), height=260,
         )
-        _stplot(fig, width="stretch")
+        _stplot(fig, use_container_width=True)
 
     with col_interv:
         st.markdown(f'<div class="ch"><div class="sec-head">Recommended Interventions{_iicon(METRIC_TOOLTIPS["recommended_intervention"])}</div>'
@@ -154,7 +153,7 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
             margin=dict(l=0,r=0,t=0,b=0), height=180,
             paper_bgcolor="white", showlegend=False,
         )
-        _stplot(fig2, width="stretch")
+        _stplot(fig2, use_container_width=True)
 
         for iname, cnt in mix.items():
             meta = INTERV_META.get(str(iname), {"color": G_MID, "icon": "•"})
@@ -185,4 +184,4 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
         margin=dict(l=0, r=0, t=0, b=0), height=240,
         plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
     )
-    _stplot(fig3, width="stretch")
+    _stplot(fig3, use_container_width=True)

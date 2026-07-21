@@ -86,7 +86,7 @@ def view_payer_landscape(scores: pd.DataFrame, state: str, top_n: int):
             coloraxis_colorbar=dict(title="Opp.", thickness=10, len=0.6,
                                     bgcolor="white", bordercolor=BORDER, borderwidth=1),
         )
-        _stplot(fig, width="stretch")
+        _stplot(fig, use_container_width=True)
 
     with col_mix:
         st.markdown(f'<div class="ch"><div class="sec-head">National Payer Mix{_iicon(METRIC_TOOLTIPS["payer_mix"])}</div>'
@@ -105,7 +105,7 @@ def view_payer_landscape(scores: pd.DataFrame, state: str, top_n: int):
             margin=dict(l=0,r=0,t=0,b=0), height=260,
             paper_bgcolor="white", showlegend=False,
         )
-        _stplot(fig2, width="stretch")
+        _stplot(fig2, use_container_width=True)
 
         st.markdown(f"""
         <div style="margin-top:.5rem;">
