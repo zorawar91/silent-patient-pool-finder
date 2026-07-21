@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.output.content import METRIC_TOOLTIPS
-from src.output.data import _ensure_dims, _opp_score, condition_score
+from src.output.data import _ensure_dims, _opp_score, condition_score, condition_tier
 from src.output.theme import (
     AMBER, BORDER, COND_META, DARK, DIM_COLORS, DIM_ICONS, DIM_LABELS,
     G_DARK, G_LIGHT, G_MID, G_PALE, INTERV_META, MUTED, RED,
@@ -103,6 +103,8 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
     scores    = _ensure_dims(scores)
     opp_col   = _opp_score(scores)
     scores, score_col = condition_score(scores, condition)
+    scores = scores.copy()
+    scores["_tier"] = condition_tier(scores, condition, score_col)
 
     # ── Prompt if no state selected ───────────────────────────────────────────
     if not state:
@@ -160,8 +162,8 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
 
     # ── State KPI banner ──────────────────────────────────────────────────────
     total_pool = int(state_df["total_estimated_pool"].sum()) if "total_estimated_pool" in state_df.columns else 0
-    priority_n = int((state_df[opp_col] >= 55).sum())
-    emerging_n = int(((state_df[opp_col] >= 40) & (state_df[opp_col] < 55)).sum())
+    priority_n = int((state_df["_tier"] == "Priority").sum())
+    emerging_n = int((state_df["_tier"] == "Emerging").sum())
     avg_score  = state_df[opp_col].mean()
     top_prog   = (state_df["recommended_intervention"].value_counts().idxmax()
                   if "recommended_intervention" in state_df.columns else "—")
@@ -196,7 +198,7 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
 
         ranked = state_df.sort_values(opp_col, ascending=True).copy()
         tier_colors = {"Priority": RED, "Emerging": AMBER, "Developing": G_LIGHT}
-        bar_colors  = [tier_colors.get(str(r.get("opportunity_tier", "Developing")), G_MID)
+        bar_colors  = [tier_colors.get(str(r.get("_tier", "Developing")), G_MID)
                        for _, r in ranked.iterrows()]
 
         fig = go.Figure(go.Bar(
@@ -225,8 +227,8 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
         # Tier donut
         st.markdown('<div class="ch"><div class="sec-head">Tier Split</div></div>',
                     unsafe_allow_html=True)
-        if "opportunity_tier" in state_df.columns:
-            tc = state_df["opportunity_tier"].astype(str).value_counts()
+        if "_tier" in state_df.columns:
+            tc = state_df["_tier"].astype(str).value_counts()
             fig2 = go.Figure(go.Pie(
                 labels=tc.index, values=tc.values, hole=0.55,
                 marker_colors=[{"Priority": RED, "Emerging": AMBER, "Developing": G_LIGHT}.get(t, G_MID)
@@ -322,7 +324,7 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
           <td style="font-size:.8rem;">{int(row['population']):,}</td>
           <td>{_score_bar(opp_val, G_MID)}</td>
           <td>{_score_bar(risk_val, DIM_COLORS.get('diagnosis_gap', G_MID))}</td>
-          <td>{_tier_pill(row.get('opportunity_tier','Developing'))}</td>
+          <td>{_tier_pill(row.get('_tier','Developing'))}</td>
           <td><span style="color:{imeta['color']};font-size:.75rem;font-weight:600;">
             {imeta['icon']} {interv}</span></td>
           <td style="font-size:.8rem;">{pool_str}</td>
@@ -340,7 +342,7 @@ def view_state_drilldown(scores: pd.DataFrame, scores_long: pd.DataFrame,
 
     export_cols = [c for c in ["county_name", "population", opp_col,
                                 "opportunity_percentile", "confidence_grade",
-                                score_col, "opportunity_tier", "recommended_intervention",
+                                score_col, "_tier", "recommended_intervention",
                                 "total_estimated_pool"] if c in top.columns]
     csv = top[export_cols].to_csv(index=False)
     st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)

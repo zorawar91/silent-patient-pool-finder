@@ -166,6 +166,58 @@ def condition_score(df: pd.DataFrame, condition: str) -> tuple[pd.DataFrame, str
     return out, col
 
 
+# Composite tier cut-offs (config/dimensions.yaml). These are calibrated to the
+# composite's distribution, which is deliberately compressed — no county leads
+# all seven dimensions, so it tops out near 65 and ≥55 selects ~0.6% of counties.
+TIER_PRIORITY_CUT = 55
+TIER_EMERGING_CUT = 40
+
+
+def condition_tier(df: pd.DataFrame, condition: str, score_col: str) -> pd.Series:
+    """
+    Tier labels for the score the Condition filter selected.
+
+    'overall' → the persisted composite tier (unchanged, matches the parquet).
+
+    A specific condition → tiers recalibrated to that condition's own
+    distribution, holding SELECTIVITY constant: whatever share of counties the
+    composite calls Priority, the same share of the top of the condition ranking
+    is called Priority. Applying the raw 55/40 cut-offs instead would be
+    meaningless — a condition score blends only two dimensions, so it spreads
+    wider (T2D reaches 80) and ≥55 would flag 140 counties instead of 20,
+    silently redefining the word "Priority" every time the dropdown changes.
+    """
+    if condition == "overall" and "opportunity_tier" in df.columns:
+        return df["opportunity_tier"].astype(str)
+
+    opp = pd.to_numeric(df[_opp_score(df)], errors="coerce")
+    share_priority = float((opp >= TIER_PRIORITY_CUT).mean())
+    share_emerging = float(
+        ((opp >= TIER_EMERGING_CUT) & (opp < TIER_PRIORITY_CUT)).mean())
+
+    s = pd.to_numeric(df[score_col], errors="coerce")
+    out = pd.Series("Developing", index=df.index)
+    # Guard the degenerate ends so quantile() stays in [0, 1].
+    if share_priority > 0:
+        out[s >= s.quantile(max(0.0, 1.0 - share_priority))] = "Priority"
+    cum = share_priority + share_emerging
+    if 0 < cum <= 1:
+        emerging_cut = s.quantile(max(0.0, 1.0 - cum))
+        out[(s >= emerging_cut) & (out != "Priority")] = "Emerging"
+    return out
+
+
+def tier_basis_label(condition: str, cond_label: str = "") -> str:
+    """One-line description of what the tier badge is measuring, so a condition
+    score is never silently read against the composite's thresholds."""
+    if condition == "overall":
+        return f"Opportunity Score ≥{TIER_PRIORITY_CUT}"
+    # Sidebar labels carry a leading emoji ("🩸 Type 2 Diabetes"); drop it so the
+    # phrase reads cleanly mid-sentence.
+    clean = "".join(ch for ch in cond_label if ch.isalnum() or ch in " -/").strip()
+    return f"top-ranked for {clean or cond_label}"
+
+
 def _has_dims(df: pd.DataFrame) -> bool:
     return "dim_disease_burden" in df.columns
 

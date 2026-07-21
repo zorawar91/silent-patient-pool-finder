@@ -9,6 +9,7 @@ import streamlit as st
 from src.output.content import METRIC_TOOLTIPS
 from src.output.data import (
     _cond_proxy, _ensure_dims, _get_intervention, _opp_score, condition_score,
+    condition_tier, tier_basis_label,
 )
 from src.output.theme import (
     AMBER, BG, BORDER, COND_META, DARK, G_DARK, G_LIGHT, G_PALE, MUTED,
@@ -22,18 +23,21 @@ def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
     opp_col   = _opp_score(scores)
     # Condition-aware score — drives the map colour, not just a label.
     scores, score_col = condition_score(scores, condition)
+    scores = scores.copy()
+    scores["_tier"] = condition_tier(scores, condition, score_col)
     filtered  = scores.copy()
     if state:
         filtered = filtered[filtered["state_name"].isin(state)]
 
     cond_label = "All Conditions" if condition == "overall" else COND_META[condition]["label"]
-    priority_n = int((filtered[opp_col] >= 55).sum())
-    emerging_n = int(((filtered[opp_col] >= 40) & (filtered[opp_col] < 55)).sum())
+    priority_n = int((filtered["_tier"] == "Priority").sum())
+    emerging_n = int((filtered["_tier"] == "Emerging").sum())
 
+    tier_note = tier_basis_label(condition, cond_label)
     c1, c2, c3, c4 = st.columns(4)
     c1.markdown(f'<div class="card-dark"><div class="label-w">Counties Mapped</div>{_iicon(METRIC_TOOLTIPS["counties_mapped"], tip_cls="tip-r")}<div class="big-num-w">{len(filtered):,}</div><div class="sub-w">{filtered["state_name"].nunique()} states</div></div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority ≥55</div>{_iicon(METRIC_TOOLTIPS["priority_tier"])}<div class="big-num" style="color:{RED};">{priority_n}</div><div class="sub" style="color:{RED};">Act now</div></div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Emerging 40–55</div>{_iicon(METRIC_TOOLTIPS["emerging_tier"])}<div class="big-num" style="color:{AMBER};">{emerging_n}</div><div class="sub" style="color:{AMBER};">Plan &amp; monitor</div></div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="card" style="border-top:3px solid {RED};"><div class="label">Priority</div>{_iicon(METRIC_TOOLTIPS["priority_tier"])}<div class="big-num" style="color:{RED};">{priority_n}</div><div class="sub" style="color:{RED};">{tier_note}</div></div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="card" style="border-top:3px solid {AMBER};"><div class="label">Emerging</div>{_iicon(METRIC_TOOLTIPS["emerging_tier"])}<div class="big-num" style="color:{AMBER};">{emerging_n}</div><div class="sub" style="color:{AMBER};">Plan &amp; monitor</div></div>', unsafe_allow_html=True)
     c4.markdown(f'<div class="card"><div class="label">Avg Score ({cond_label})</div>{_iicon(METRIC_TOOLTIPS["avg_opp_score"])}<div class="big-num">{filtered[score_col].mean():.0f}</div><div class="sub-muted">this view</div></div>', unsafe_allow_html=True)
 
     st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
@@ -61,8 +65,8 @@ def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
                            "county_fips": False}
             if not is_overall:
                 hover_extra[score_col] = ":.0f"
-            if "opportunity_tier" in map_data.columns:
-                hover_extra["opportunity_tier"] = True
+            if "_tier" in map_data.columns:
+                hover_extra["_tier"] = True
 
             # Colour by whatever the Condition filter selected. For the composite
             # the scale is anchored to its tier thresholds (25/40/55); a
@@ -99,7 +103,7 @@ def view_geographic(scores: pd.DataFrame, scores_long: pd.DataFrame,
                 hover_name="county_name",
                 hover_data={"state_name": True, "population": ":,", **hover_extra},
                 labels={opp_col: "Opp. Score", score_col: f"{cond_label} Risk",
-                        "recommended_intervention": "Program", "opportunity_tier": "Tier"},
+                        "recommended_intervention": "Program", "_tier": "Tier"},
             )
             fig.update_layout(
                 margin=dict(r=0,t=0,l=0,b=0),

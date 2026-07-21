@@ -7,7 +7,10 @@ import pandas as pd
 import streamlit as st
 
 from src.output.content import METRIC_TOOLTIPS
-from src.output.data import _ensure_dims, _ensure_payer, _opp_score, condition_score
+from src.output.data import (
+    _ensure_dims, _ensure_payer, _opp_score, condition_score, condition_tier,
+    tier_basis_label,
+)
 from src.output.theme import (
     AMBER, BLUE, BORDER, DARK, G_DARK, G_MID, G_PALE, INTERV_META, MUTED,
     PURPLE, RED, STATE_ABBREV, _iicon,
@@ -26,6 +29,10 @@ def view_insights(scores: pd.DataFrame, scores_long: pd.DataFrame,
     # Rank by the condition the user selected; tiers stay on the composite
     # (the tier badge is explicitly an overall-opportunity classification).
     scores, rank_col = condition_score(scores, condition)
+    # Tiers recalibrated to the selected condition (same selectivity as the
+    # composite, so "Priority" keeps one meaning while membership responds).
+    scores = scores.copy()
+    scores["_tier"] = condition_tier(scores, condition, rank_col)
 
     # Apply state filter
     filtered = scores.copy()
@@ -42,7 +49,7 @@ def view_insights(scores: pd.DataFrame, scores_long: pd.DataFrame,
 
     # ── Pre-compute key insight figures ──────────────────────────────────────
     all_sorted = filtered.sort_values(rank_col, ascending=False)
-    priority   = filtered[filtered[opp_col] >= 55].sort_values(opp_col, ascending=False)
+    priority   = filtered[filtered["_tier"] == "Priority"].sort_values(rank_col, ascending=False)
     top3       = all_sorted.head(3)
 
     # Most underserved = widest gap between Diagnosis Gap and Access to Care
@@ -82,8 +89,8 @@ def view_insights(scores: pd.DataFrame, scores_long: pd.DataFrame,
         else all_sorted.head(5)
     )
 
-    n_priority = int((filtered[opp_col] >= 55).sum())
-    n_emerging = int(((filtered[opp_col] >= 40) & (filtered[opp_col] < 55)).sum())
+    n_priority = int((filtered["_tier"] == "Priority").sum())
+    n_emerging = int((filtered["_tier"] == "Emerging").sum())
 
     # ── Banner ────────────────────────────────────────────────────────────────
     st.markdown(f"""
@@ -99,7 +106,7 @@ def view_insights(scores: pd.DataFrame, scores_long: pd.DataFrame,
     # ── Top 3 Action Counties ─────────────────────────────────────────────────
     st.markdown(f"""<div class='ch'>
       <div class='sec-head'>🎯 Top 3 Counties to Act On Now {_iicon(METRIC_TOOLTIPS["opportunity_score"], pos="")}</div>
-      <div class='sec-sub'>Highest {'composite opportunity' if condition == 'overall' else cond_label + ' risk'} scores in current filter — these are your first calls</div>
+      <div class='sec-sub'>Highest {'composite opportunity' if condition == 'overall' else cond_label + ' risk'} scores in current filter — these are your first calls · tier = {tier_basis_label(condition, cond_label)}</div>
     </div>""", unsafe_allow_html=True)
 
     c1, c2, c3 = st.columns(3)
@@ -108,7 +115,7 @@ def view_insights(scores: pd.DataFrame, scores_long: pd.DataFrame,
         pool   = int(row.get("total_estimated_pool", 0))
         interv = str(row.get("recommended_intervention", "Pharmacy-Based Screening"))
         imeta  = INTERV_META.get(interv, {"color": G_MID, "icon": "💊", "desc": interv})
-        tier   = str(row.get("opportunity_tier", "Developing"))
+        tier   = str(row.get("_tier", "Developing"))
         tcls   = {"Priority": "tier-priority", "Emerging": "tier-emerging"}.get(tier, "tier-developing")
         gap    = row.get("dim_diagnosis_gap", 0)
         gap_lbl = "Critical" if gap >= 70 else "High" if gap >= 50 else "Moderate"
@@ -267,8 +274,8 @@ def view_insights(scores: pd.DataFrame, scores_long: pd.DataFrame,
         rows_html = ""
         for _, row in fast_growing.iterrows():
             traj = row.get(traj_col, 0)
-            opp  = row.get(opp_col, 0)
-            tier = str(row.get("opportunity_tier", "Developing"))
+            opp  = row.get(rank_col, 0)
+            tier = str(row.get("_tier", "Developing"))
             tcls = {"Priority": "tier-priority", "Emerging": "tier-emerging"}.get(tier, "tier-developing")
             st_abbr = STATE_ABBREV.get(row.get("state_name", ""), row.get("state_name", ""))
             rows_html += f"""

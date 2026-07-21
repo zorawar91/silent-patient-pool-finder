@@ -10,7 +10,7 @@ import streamlit as st
 from src.output.content import METRIC_TOOLTIPS
 from src.output.data import (
     condition_score,
-    _cond_proxy, _ensure_dims, _get_intervention, _opp_score,
+    _cond_proxy, _ensure_dims, _get_intervention, _opp_score, condition_tier,
 )
 from src.output.theme import (
     AMBER, BLUE, BORDER, COND_META, DARK, G_DARK, G_LIGHT, G_MID,
@@ -23,9 +23,11 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
     scores  = _ensure_dims(scores)
     opp_col = _opp_score(scores)
     scores, score_col = condition_score(scores, condition)
+    scores = scores.copy()
+    scores["_tier"] = condition_tier(scores, condition, score_col)
     total_pool = int(scores["total_estimated_pool"].sum()) if "total_estimated_pool" in scores.columns else 45_700_000
-    priority_n = int((scores[opp_col] >= 55).sum())
-    emerging_n = int(((scores[opp_col] >= 40) & (scores[opp_col] < 55)).sum())
+    priority_n = int((scores["_tier"] == "Priority").sum())
+    emerging_n = int((scores["_tier"] == "Emerging").sum())
 
     st.markdown(f"""
     <div class="banner">
