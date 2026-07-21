@@ -19,12 +19,34 @@ log = logging.getLogger(__name__)
 _GEOJSON_URL = "https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json"
 _GEOJSON_CACHE = Path("data/open/geojson_counties_fips.json")
 
+SCORES_PATH = Path("data/scored/dimension_scores.parquet")
+ZIP_PATH = Path("data/scored/zip_scores.parquet")
+HCP_PATH = Path("data/scored/hcp_targets.parquet")
 
-@st.cache_data
-def load_data():
+
+def _file_stamp(path: Path) -> tuple[int, int]:
+    """
+    (mtime_ns, size) for a data file — used as a cache key.
+
+    st.cache_data keys on arguments only. A loader that takes none is cached for
+    the life of the process, so re-running an ingestion pipeline leaves a running
+    dashboard serving the previous numbers indefinitely: Streamlit hot-reloads
+    changed .py files but has no idea a parquet was rewritten underneath it.
+    Passing this stamp in makes a regenerated file invalidate its own cache.
+    """
+    try:
+        s = path.stat()
+        return (s.st_mtime_ns, s.st_size)
+    except OSError:
+        return (0, 0)
+
+
+@st.cache_data(show_spinner=False)
+def _load_data_cached(stamp: tuple[int, int]):
+    """`stamp` is unused inside — it exists purely to key the cache on the file."""
     # Always prefer local dimension_scores.parquet — most complete and up-to-date
     # (3,144 counties, 5 real data sources). Neon and legacy paths are fallbacks only.
-    dim_path = Path("data/scored/dimension_scores.parquet")
+    dim_path = SCORES_PATH
     if dim_path.exists():
         scores      = pd.read_parquet(dim_path)
         scores_long = pd.DataFrame()   # not needed — all signals are columns in scores
@@ -62,6 +84,11 @@ def load_data():
     return scores, scores_long
 
 
+def load_data():
+    """County scores, re-read automatically whenever the parquet changes."""
+    return _load_data_cached(_file_stamp(SCORES_PATH))
+
+
 @st.cache_data
 def load_geojson():
     """County-boundary GeoJSON for the choropleth. Cached to disk after the
@@ -87,22 +114,24 @@ def load_geojson():
         return None
 
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
+def _load_zip_cached(stamp: tuple[int, int]) -> pd.DataFrame:
+    return pd.read_parquet(ZIP_PATH) if ZIP_PATH.exists() else pd.DataFrame()
+
+
 def load_zip_data() -> pd.DataFrame:
-    """Load ZCTA-level scores produced by src/ingestion/ingest_zcta_data.py."""
-    path = Path("data/scored/zip_scores.parquet")
-    if path.exists():
-        return pd.read_parquet(path)
-    return pd.DataFrame()
+    """ZCTA-level scores from src/ingestion/ingest_zcta_data.py."""
+    return _load_zip_cached(_file_stamp(ZIP_PATH))
 
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
+def _load_hcp_cached(stamp: tuple[int, int]) -> pd.DataFrame:
+    return pd.read_parquet(HCP_PATH) if HCP_PATH.exists() else pd.DataFrame()
+
+
 def load_hcp_data() -> pd.DataFrame:
-    """Load scored HCP targets produced by src/ingestion/ingest_hcp_data.py."""
-    path = Path("data/scored/hcp_targets.parquet")
-    if path.exists():
-        return pd.read_parquet(path)
-    return pd.DataFrame()
+    """Scored HCP targets from src/ingestion/ingest_hcp_data.py."""
+    return _load_hcp_cached(_file_stamp(HCP_PATH))
 
 
 def _opp_score(df: pd.DataFrame) -> str:
