@@ -24,8 +24,10 @@ data/scored/*.csv
 data/scored/scores.parquet
 data/scored/scores_long.parquet
 
-# Streamlit
-.streamlit/
+# Streamlit — ship the theme config, never the secrets
+.streamlit/*
+!.streamlit/config.toml
+!.streamlit/secrets.toml.example
 
 # macOS
 .DS_Store

@@ -368,6 +368,58 @@ button[data-baseweb="tab"][aria-selected="true"] {{
     visibility: visible !important;
 }}
 
+/* ── Expander headers: pin background AND text colour ────────────────────────
+   Expander summaries inherited their colours from the ambient Streamlit theme,
+   so the open state could land on dark-text-on-dark-fill (sidebar "Analyst &
+   Audit") or light-text-on-light-fill (the QA Gate Report rows) — unreadable
+   either way. Both halves of the contrast pair are now set explicitly, in the
+   open and closed states, so they never depend on the viewer's theme. */
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] details > summary,
+[data-testid="stExpander"] details[open] > summary {{
+    background: {WHITE} !important;
+    color: {DARK} !important;
+    border: 1px solid {BORDER} !important;
+    border-radius: 8px !important;
+    font-weight: 600;
+}}
+/* Children inherit their own colours from the theme — force them too. */
+[data-testid="stExpander"] summary p,
+[data-testid="stExpander"] summary span,
+[data-testid="stExpander"] summary div,
+[data-testid="stExpander"] summary label {{
+    color: {DARK} !important;
+}}
+[data-testid="stExpander"] summary svg {{ fill: {G_DARK} !important; }}
+[data-testid="stExpander"] summary:hover {{ background: {G_PALE} !important; }}
+
+/* Expander body: keep it on the light card surface with readable text. */
+[data-testid="stExpander"] [data-testid="stExpanderDetails"],
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] p,
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] span,
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] div {{
+    color: {DARK} !important;
+}}
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] {{
+    background: {WHITE} !important;
+}}
+
+/* Sidebar expander sits on the white sidebar — tint it so it reads as a group
+   header rather than a floating card. */
+[data-testid="stSidebar"] [data-testid="stExpander"] summary,
+[data-testid="stSidebar"] [data-testid="stExpander"] details[open] > summary {{
+    background: {G_PALE} !important;
+    color: {G_DARK} !important;
+}}
+[data-testid="stSidebar"] [data-testid="stExpander"] summary p,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary span,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary div {{
+    color: {G_DARK} !important;
+}}
+[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] {{
+    background: transparent !important;
+}}
+
 /* Desktop: comfortable fixed width while open (nav is always in reach). */
 @media (min-width: 768px) {{
     [data-testid="stSidebar"][aria-expanded="true"] {{

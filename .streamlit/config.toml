@@ -1,0 +1,12 @@
+# Pin the app to a light theme.
+# All of the dashboard's custom CSS (white cards, navy text, #F0F6FC page
+# background) assumes a light base. Without this, Streamlit follows the
+# VIEWER's OS/browser dark-mode preference, which produced unreadable
+# dark-on-dark expander headers and light-on-light QA-gate text for anyone
+# whose machine is in dark mode.
+[theme]
+base = "light"
+primaryColor = "#0077C8"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F0F6FC"
+textColor = "#0A1F3C"
