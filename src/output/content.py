@@ -81,8 +81,11 @@ METRIC_TOOLTIPS = {
         "burden, payer landscape, or demographic trends that may elevate these counties over time.",
     "est_pool":
         "Estimated number of adults living with an undiagnosed chronic condition in this geography. "
-        "Calculated as: county adult population × disease prevalence rate × national undiagnosis rate. "
-        "Type 2 Diabetes: 23.1% of cases undiagnosed. "
+        "Calculated as: county ADULT population (Census PEP 18+) × disease prevalence rate × "
+        "undiagnosis rate. For Type 2 Diabetes the rate is county-specific, weighted by the local "
+        "adult age mix using NHANES Aug 2021–Aug 2023 strata (36.1% of cases undiagnosed at 20–39, "
+        "31.6% at 40–59, 24.9% at 60+; 28.5% for all adults). The undiagnosed SHARE falls with age "
+        "because older adults are screened more, so younger counties hide proportionally more cases. "
         "Hypertension: approximately 20% undiagnosed. "
         "Hypothyroidism: approximately 50% undiagnosed.",
     "counties_scored":
@@ -139,7 +142,7 @@ METRIC_TOOLTIPS = {
         "Most counties cluster in the moderate range; the red bars represent the highest-yield markets.",
     "condition_t2d":
         "Type 2 Diabetes — approximately 8.7 million estimated undiagnosed adults nationally. "
-        "Research shows 23.1% of all Type 2 Diabetes cases are undiagnosed. "
+        "NHANES 2021–2023: 28.5% of all Type 2 Diabetes cases are undiagnosed nationally, ranging 24.9%–36.1% by age band. "
         "Priority counties are those with a geography risk score of 55 or above.",
     "condition_htn":
         "Hypertension (high blood pressure) — approximately 34.9 million estimated undiagnosed "
@@ -246,7 +249,9 @@ METRIC_TOOLTIPS = {
     "zip_pool":
         "Estimated undiagnosed adults in this ZIP across T2D, hypertension, and hypothyroidism: "
         "adult population × diagnosed prevalence × published national undiagnosis rates "
-        "(T2D 23.1%, HTN ~20%, hypothyroidism ~50%). For relative sizing, not clinical use.",
+        "(T2D 28.5% national, HTN ~20%, hypothyroidism ~50%). ZIP-level figures use the national "
+        "T2D rate — no ZCTA age composition is ingested, so they run slightly higher than "
+        "the county figures they downscale from. For relative sizing, not clinical use.",
     # ── HCP Targeting ─────────────────────────────────────────────────────────
     "hcp_count":
         "US prescribers scored from the public CMS Medicare Physician & Other Practitioners "

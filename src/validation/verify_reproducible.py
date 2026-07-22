@@ -54,6 +54,7 @@ DERIVED_COLUMNS = [
     "priority_rank", "opportunity_percentile",
     "confidence_grade", "confidence_sources",
     "est_pool_t2d", "est_pool_htn", "est_pool_hypo", "total_estimated_pool",
+    "t2d_undiagnosed_rate",
 ]
 
 FLOAT_TOL = 1e-9

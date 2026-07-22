@@ -119,6 +119,14 @@ SOURCE_REGISTRY: list[SourceSpec] = [
         scored_marker=("zip_scores.parquet", "zip_dim_payer_landscape"),
     ),
     SourceSpec(
+        "County Population by Age (PEP)", "US Census Bureau", "2023 vintage",
+        "census_county_age.parquet", "county", "adult_population",
+        "Undiagnosed-pool denominator (adults 18+) · age-weighted T2D rate",
+        "https://www.census.gov/programs-surveys/popest.html",
+        notes="Bulk file — no API key required.",
+        scored_marker=("dimension_scores.parquet", "adult_population"),
+    ),
+    SourceSpec(
         "Medicare Physician & Other Practitioners", "CMS", "2024-12 release (2023 data)",
         "cms_providers.parquet", "prescriber (NPI)", "tot_benes",
         "HCP Targeting (panel size, specialty, panel conditions)",

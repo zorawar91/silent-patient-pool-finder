@@ -16,6 +16,7 @@ reproducible: CI re-derives all of it from the committed inputs on every push.
 | Input | Value | Source |
 |---|---|---|
 | Total population | **65,716** | US Census ACS 5-yr (2022) |
+| **Adult population (18+)** | **44,621** | US Census PEP 2023 |
 | Diagnosed diabetes prevalence | **20.0%** | CDC PLACES 2025 (2023 BRFSS) |
 | Diagnosed hypertension prevalence | **36.6%** | CDC PLACES 2025 |
 | Poverty rate | **33.5%** | Census ACS |
@@ -25,7 +26,7 @@ reproducible: CI re-derives all of it from the committed inputs on every push.
 | Federally funded safety-net clinic (FQHC) | **None** | HRSA |
 | Medicare Advantage penetration | **80.6%** | CMS (real county data) |
 
-No claims. No patient records. No licensing. Eight public numbers.
+No claims. No patient records. No licensing. Nine public numbers.
 
 ---
 
@@ -35,23 +36,28 @@ The pool is arithmetic, not a model — every factor is sourced and the chain is
 inspectable:
 
 ```
-T2D      65,716 × 20.0% prevalence × 23.1% undiagnosed  =  3,036
-HTN      65,716 × 36.6% prevalence × 20.0% undiagnosed  =  4,810
-Hypo     65,716 ×  4.0% prevalence × 50.0% undiagnosed  =  1,314
-                                                          ─────
-                    Estimated silent pool in Starr County =  9,160
+T2D      44,621 adults × 20.0% prevalence × 32.9% undiagnosed  =  2,936
+HTN      44,621 adults × 36.6% prevalence × 20.0% undiagnosed  =  3,266
+Hypo     44,621 adults ×  4.0% prevalence × 50.0% undiagnosed  =    892
+                                                                 ─────
+                       Estimated silent pool in Starr County  =  7,094
 ```
 
-**≈ 9,160 people** in one county who have a chronic condition and don't know it.
+The 32.9% is **Starr's own** undiagnosed rate, not a national constant — it is the
+NHANES age-band rates (36.1% at 20–39, 31.6% at 40–59, 24.9% at 60+) weighted by
+Starr's adult age mix. Nationally the range across counties is 28.2%–34.8%.
+
+**≈ 7,094 people** in one county who have a chronic condition and don't know it.
 The undiagnosed percentages are published national rates (CDC/NHANES); the
 prevalence is county-specific. *This is a planning estimate, not a patient list.*
 
-> **Known simplification, stated plainly:** CDC PLACES prevalence is measured on
-> adults (18+), but the multiplier above uses *total* county population. That
-> makes the pool a modest over-estimate in counties with many children. It is
-> deliberately not "corrected" with an assumed adult share — we'd rather show one
-> transparent multiplication than bury a second assumption inside it. Applying an
-> adult-share adjustment is a one-line change when a client wants it.
+> **Approximation worth stating:** the Census age bands available per county
+> (18–44 / 45–64 / 65+) do not align exactly with the NHANES bands
+> (20–39 / 40–59 / 60+). The boundary mismatches partly offset, and this is far
+> closer than one national constant, but it is a mapping rather than an identity.
+> HTN and hypothyroidism keep flat national rates — no published age-stratified
+> undiagnosed shares exist for them, and inventing a gradient would be worse than
+> an honest constant.
 
 ---
 
@@ -90,7 +96,7 @@ The recommendation is derived from the county's own profile, not chosen by hand:
 > residents are in plans whose Stars ratings improve when chronic conditions are
 > found and managed early.
 
-**The pitch this writes for you:** *"Starr County has 9,160 residents living with
+**The pitch this writes for you:** *"Starr County has 7,094 residents living with
 undiagnosed diabetes, hypertension, or thyroid disease, and 80.6% of your
 Medicare-eligible members are in MA plans. Closing that gap raises your Stars
 measures and cuts downstream complication cost. Let's co-fund screening."*
@@ -123,7 +129,7 @@ number means something when it *is* positive.
 
 ## The whole chain, in one line
 
-> **8 public inputs → 9,160 hidden patients → score 65 (#1 in the US) → a payer
+> **9 public inputs → 7,094 hidden patients → score 65 (#1 in the US) → a payer
 > partnership → a measured diagnosis-rate lift.**
 >
 > Repeat 3,144 times. That's the product.
@@ -131,5 +137,5 @@ number means something when it *is* positive.
 ---
 *All values from the committed `dimension_scores.parquet`, verified reproducible
 from the committed inputs by `src/validation/verify_reproducible.py` (runs in CI).
-The undiagnosed-rate multipliers (23.1% / 20% / 50%) are published national
-figures; the campaign result is the live output of the measurement engine.*
+The T2D undiagnosed rate is age-weighted from NHANES 2021–2023 strata; HTN (20%)
+and hypothyroidism (50%) use published national figures; the campaign result is the live output of the measurement engine.*

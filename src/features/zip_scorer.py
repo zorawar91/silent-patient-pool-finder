@@ -450,8 +450,11 @@ def _zip_intervention(row: pd.Series) -> str:
 def _estimate_pool(df: pd.DataFrame) -> pd.DataFrame:
     """
     Estimate undiagnosed patient count per ZCTA.
-    Uses same logic as county pipeline:
-      T2D undiagnosed:  population × diabetes_prevalence_pct × 0.231
+    Uses the county pipeline's NATIONAL rates. Unlike the county layer this
+    cannot age-weight the T2D rate or use an adult denominator — no ZCTA-level
+    age composition is ingested — so ZIP pools are systematically slightly
+    higher than the county figures they downscale from. Documented, not hidden.
+      T2D undiagnosed:  population × diabetes_prevalence_pct × 0.285
       HTN undiagnosed:  population × hypertension_prevalence_pct × 0.200
       Hypo undiagnosed: population × 0.04 × 0.50 (national avg)
     """
@@ -465,7 +468,7 @@ def _estimate_pool(df: pd.DataFrame) -> pd.DataFrame:
                         pd.Series(_DEFAULTS["hypertension_prevalence_pct"], index=df.index)
                 ).fillna(_DEFAULTS["hypertension_prevalence_pct"])
 
-    df["zip_t2d_pool"]   = (pop * t2d_prev * 0.231).round().astype(int)
+    df["zip_t2d_pool"]   = (pop * t2d_prev * 0.285).round().astype(int)
     df["zip_htn_pool"]   = (pop * htn_prev * 0.200).round().astype(int)
     df["zip_hypo_pool"]  = (pop * 0.040    * 0.500).round().astype(int)
     df["zip_total_pool"] = df["zip_t2d_pool"] + df["zip_htn_pool"] + df["zip_hypo_pool"]

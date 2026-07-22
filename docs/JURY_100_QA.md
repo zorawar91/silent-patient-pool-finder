@@ -18,7 +18,7 @@ plain-language glossary so every technical word you say is one you can explain.*
 Because the diagnosed market is saturated and contested — in metabolic disease, growth now comes from new diagnoses, not share shifts. Every screening dollar pharma already spends is allocated blind. It's the rare problem where the commercial incentive and the public-health need are the same action: find the patient earlier.
 
 **2. Where do your 8.7M / 34.9M / 2.1M numbers come from?**
-Published national estimates: CDC/NHANES for diabetes (23.1% of cases undiagnosed), AHA/NHANES-based estimates for hypertension unaware/uncontrolled, and thyroid literature for hypothyroidism (~50% undiagnosed). They're on the provenance page and in the methodology doc with sources.
+Published national estimates: CDC/NHANES for diabetes (28.5% of cases undiagnosed nationally, applied county-by-county as an age-weighted rate of 24.9–36.1% using NHANES 2021–2023 age strata), AHA/NHANES-based estimates for hypertension unaware/uncontrolled, and thyroid literature for hypothyroidism (~50% undiagnosed). They're on the provenance page and in the methodology doc with sources.
 
 **3. If these patients don't visit doctors, how does finding their geography help?**
 Most of them *do* touch the system — pharmacies, checkups, ERs — they just don't get screened. The interventions SPPF recommends (pharmacy screening, community health centers, payer-funded outreach) meet them at those touchpoints. Geography tells you where to put the touchpoint.

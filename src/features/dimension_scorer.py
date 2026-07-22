@@ -573,24 +573,67 @@ def _confidence_grade(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
 
 # ── Undiagnosed Patient Pool ──────────────────────────────────────────────────
 
-# Published national undiagnosis rates (see the est_pool tooltip / methodology).
+# Published national undiagnosis rates. HTN and hypothyroidism stay flat — no
+# published age-stratified undiagnosed shares are available for them, and
+# inventing a gradient would be worse than an honest constant.
 # Kept identical to the ZIP pipeline (zip_scorer._estimate_pool) so county and
 # ZIP pool numbers reconcile.
-_UNDIAG_RATES = {"t2d": 0.231, "htn": 0.200, "hypo": 0.500}
+_UNDIAG_RATES = {"t2d": 0.285, "htn": 0.200, "hypo": 0.500}
 _HYPO_PREVALENCE = 0.04   # national hypothyroidism prevalence proxy (no county source)
+
+# T2D undiagnosed share of ALL diabetes cases, by age band.
+# Source: NHANES Aug 2021-Aug 2023, NCHS Data Brief 516 (undiagnosed ÷ total):
+#     20-39   1.3 / 3.6  = 0.361
+#     40-59   5.6 / 17.7 = 0.316
+#     60+     6.8 / 27.3 = 0.249
+#     adults  4.5 / 15.8 = 0.285   <- _UNDIAG_RATES["t2d"], the fallback
+# Note the direction: the undiagnosed SHARE falls as age rises (older adults are
+# screened far more), even though prevalence climbs steeply. A young county
+# therefore hides proportionally MORE cases — signal a flat rate erases.
+#
+# Approximation to state plainly: county age bands come from Census PEP
+# (18-44 / 45-64 / 65+) and do not align exactly with the NHANES bands
+# (20-39 / 40-59 / 60+). The boundary mismatches partly offset, and the result
+# is far closer than one national constant, but it is a mapping, not an identity.
+_T2D_UNDIAG_BY_AGE = {"young": 0.361, "middle": 0.316, "older": 0.249}
+
+
+def t2d_undiagnosed_rate(df: pd.DataFrame) -> pd.Series:
+    """
+    County-specific undiagnosed share of diabetes cases, weighted by the local
+    adult age mix. Falls back to the national adult rate wherever the age
+    composition is unavailable, so this can never fail closed.
+    """
+    shares = ["age_share_young", "age_share_middle", "age_share_older"]
+    national = pd.Series(_UNDIAG_RATES["t2d"], index=df.index)
+    if not all(c in df.columns for c in shares):
+        return national
+
+    w = {k: pd.to_numeric(df[f"age_share_{k}"], errors="coerce")
+         for k in _T2D_UNDIAG_BY_AGE}
+    total = sum(w.values())
+    rate = sum(_T2D_UNDIAG_BY_AGE[k] * w[k] for k in _T2D_UNDIAG_BY_AGE) / total
+    # Rows with no/degenerate age mix keep the national rate.
+    return rate.where(total.notna() & (total > 0), national)
 
 
 def estimate_undiagnosed_pool(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Estimated undiagnosed adults per county across T2D, HTN, and hypothyroidism.
+    Estimated undiagnosed ADULTS per county across T2D, HTN, and hypothyroidism.
 
-        T2D  = population × diabetes_prevalence_pct     × 0.231
-        HTN  = population × hypertension_prevalence_pct × 0.200
-        Hypo = population × 0.04                        × 0.50
+        T2D  = adults × diabetes_prevalence_pct     × age-weighted undiagnosed share
+        HTN  = adults × hypertension_prevalence_pct × 0.200
+        Hypo = adults × 0.04                        × 0.50
+
+    Two corrections versus a flat national multiplier:
+      * denominator is the ADULT population where available (prevalence is
+        measured on adults, so using total population over-counted young
+        counties), and
+      * the T2D rate follows the county's age mix (see _T2D_UNDIAG_BY_AGE).
 
     Prevalence columns are fractions (0.135 = 13.5%). Writes the per-condition
-    breakdown plus `total_estimated_pool`. Missing inputs contribute 0 rather
-    than NaN, so the total is always a usable integer.
+    breakdown, the rate actually applied, plus `total_estimated_pool`. Missing
+    inputs contribute 0 rather than NaN, so the total is always a usable integer.
     """
     out = df.copy()
 
@@ -600,13 +643,19 @@ def estimate_undiagnosed_pool(df: pd.DataFrame) -> pd.DataFrame:
             return pd.to_numeric(out[name], errors="coerce").fillna(0.0)
         return pd.Series(0.0, index=out.index)
 
-    pop = _num("population")
-    if (pop == 0).all():          # no usable population — fall back to total_population
+    # Adult population is the correct denominator for adult prevalence rates.
+    pop = _num("adult_population")
+    if (pop == 0).all():
+        pop = _num("population")
+    if (pop == 0).all():
         pop = _num("total_population")
+
     t2d_prev = _num("diabetes_prevalence_pct")
     htn_prev = _num("hypertension_prevalence_pct")
+    t2d_rate = t2d_undiagnosed_rate(out).fillna(_UNDIAG_RATES["t2d"])
 
-    out["est_pool_t2d"]  = (pop * t2d_prev * _UNDIAG_RATES["t2d"]).round().astype("int64")
+    out["t2d_undiagnosed_rate"] = t2d_rate.round(4)
+    out["est_pool_t2d"]  = (pop * t2d_prev * t2d_rate).round().astype("int64")
     out["est_pool_htn"]  = (pop * htn_prev * _UNDIAG_RATES["htn"]).round().astype("int64")
     out["est_pool_hypo"] = (pop * _HYPO_PREVALENCE * _UNDIAG_RATES["hypo"]).round().astype("int64")
     out["total_estimated_pool"] = (

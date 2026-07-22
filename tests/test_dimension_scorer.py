@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.features.dimension_scorer import (
     DEFAULT_WEIGHTS,
+    t2d_undiagnosed_rate,
     _norm,
     compute_all_dimensions,
     estimate_undiagnosed_pool,
@@ -141,11 +142,12 @@ def test_pool_formula_and_components():
         "hypertension_prevalence_pct": [0.30, 0.30, 0.30],
     })
     out = estimate_undiagnosed_pool(df)
-    # T2D = 100000 * 0.10 * 0.231 = 2310 ; HTN = 100000*0.30*0.200 = 6000 ; Hypo = 100000*0.04*0.5 = 2000
-    assert out.loc[0, "est_pool_t2d"] == 2310
+    # No age mix -> national NHANES adult rate 0.285.
+    # T2D = 100000 * 0.10 * 0.285 = 2850 ; HTN = 100000*0.30*0.200 = 6000 ; Hypo = 100000*0.04*0.5 = 2000
+    assert out.loc[0, "est_pool_t2d"] == 2850
     assert out.loc[0, "est_pool_htn"] == 6000
     assert out.loc[0, "est_pool_hypo"] == 2000
-    assert out.loc[0, "total_estimated_pool"] == 2310 + 6000 + 2000
+    assert out.loc[0, "total_estimated_pool"] == 2850 + 6000 + 2000
     # zero population -> zero pool
     assert out.loc[1, "total_estimated_pool"] == 0
     # total is always the sum of components
@@ -162,7 +164,7 @@ def test_pool_falls_back_to_total_population_and_handles_missing_prevalence():
     out = estimate_undiagnosed_pool(df)
     assert out["total_estimated_pool"].notna().all()
     assert out.loc[0, "est_pool_htn"] == 0
-    assert out.loc[0, "est_pool_t2d"] == 231  # 10000 * 0.10 * 0.231
+    assert out.loc[0, "est_pool_t2d"] == 285  # 10000 * 0.10 * 0.285
 
 
 def test_norm_handles_all_nan_and_constant_series():
@@ -173,3 +175,69 @@ def test_norm_handles_all_nan_and_constant_series():
     assert (_norm(constant) == 0.5).all()
     ramp = _norm(pd.Series([0.0, 5.0, 10.0]))
     assert ramp.iloc[0] == 0.0 and ramp.iloc[2] == 1.0
+
+
+# ── NHANES age-weighted T2D undiagnosed rate ─────────────────────────────────
+
+def test_age_weighted_rate_is_bounded_by_the_published_strata():
+    """Any county's rate must sit inside the NHANES band range — a weighted
+    average of the three published rates can never escape them."""
+    df = pd.DataFrame({
+        "population": [10_000] * 3,
+        "diabetes_prevalence_pct": [0.10] * 3,
+        "age_share_young":  [1.0, 0.0, 0.34],
+        "age_share_middle": [0.0, 0.0, 0.33],
+        "age_share_older":  [0.0, 1.0, 0.33],
+    })
+    r = t2d_undiagnosed_rate(df)
+    assert abs(r.iloc[0] - 0.361) < 1e-9, "all-young county must equal the 20-39 rate"
+    assert abs(r.iloc[1] - 0.249) < 1e-9, "all-older county must equal the 60+ rate"
+    assert 0.249 <= r.iloc[2] <= 0.361
+
+
+def test_younger_counties_have_a_higher_undiagnosed_share():
+    """The counter-intuitive direction that motivates this whole change:
+    older adults are screened more, so the undiagnosed SHARE falls with age."""
+    df = pd.DataFrame({
+        "age_share_young":  [0.7, 0.1],
+        "age_share_middle": [0.2, 0.2],
+        "age_share_older":  [0.1, 0.7],
+    })
+    r = t2d_undiagnosed_rate(df)
+    assert r.iloc[0] > r.iloc[1]
+
+
+def test_rate_falls_back_to_national_without_age_mix():
+    df = pd.DataFrame({"population": [1_000], "diabetes_prevalence_pct": [0.1]})
+    assert t2d_undiagnosed_rate(df).iloc[0] == pytest.approx(0.285)
+
+
+def test_degenerate_age_mix_falls_back_rather_than_dividing_by_zero():
+    df = pd.DataFrame({
+        "age_share_young": [0.0, None], "age_share_middle": [0.0, None],
+        "age_share_older": [0.0, None],
+    })
+    r = t2d_undiagnosed_rate(df)
+    assert r.notna().all()
+    assert ((r - 0.285).abs() < 1e-9).all()
+
+
+def test_adult_population_is_preferred_denominator():
+    """Prevalence is measured on adults; using total population over-counted
+    young counties. adult_population must win when present."""
+    df = pd.DataFrame({
+        "population": [100_000], "adult_population": [50_000],
+        "diabetes_prevalence_pct": [0.10], "hypertension_prevalence_pct": [0.0],
+    })
+    out = estimate_undiagnosed_pool(df)
+    assert out.loc[0, "est_pool_t2d"] == round(50_000 * 0.10 * 0.285)
+
+
+def test_pool_records_the_rate_it_actually_applied():
+    df = pd.DataFrame({
+        "adult_population": [10_000], "diabetes_prevalence_pct": [0.1],
+        "age_share_young": [1.0], "age_share_middle": [0.0], "age_share_older": [0.0],
+    })
+    out = estimate_undiagnosed_pool(df)
+    assert out.loc[0, "t2d_undiagnosed_rate"] == pytest.approx(0.361, abs=1e-4)
+    assert out.loc[0, "est_pool_t2d"] == round(10_000 * 0.1 * 0.361)

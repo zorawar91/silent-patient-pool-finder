@@ -122,6 +122,18 @@ def main():
     log.info("\n[8/8] Building merged panel and scoring 7 dimensions …")
     panel = _build_panel(counties, cdc, acs, cms, chr_df, usda, cdc_prior)
 
+    # Adult age composition — gives the pool estimate the correct ADULT
+    # denominator and a county-specific, age-weighted T2D undiagnosed rate.
+    # No API key needed (bulk PEP file); degrades to national rates if absent.
+    try:
+        from src.ingestion.open_data.census_age import download as _download_age
+        age_mix = _download_age(cache_dir=OPEN_DIR)
+        if not age_mix.empty:
+            panel = panel.merge(age_mix, on="county_fips", how="left")
+            log.info(f"      Age mix merged for {panel['adult_population'].notna().sum():,} counties")
+    except Exception as exc:
+        log.warning(f"      County age mix unavailable ({exc}) — using national rates.")
+
     from src.features.dimension_scorer import compute_all_dimensions
     # No synthetic signals — use real-data proxies for all dimensions
     dim_scores = compute_all_dimensions(panel, orig_signals=None)
