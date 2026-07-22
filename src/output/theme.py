@@ -321,12 +321,43 @@ button[data-baseweb="tab"][aria-selected="true"] {{
 [data-testid="stSidebarCollapseButton"],
 [data-testid="stSidebarCollapseButton"] > button,
 [data-testid="stSidebar"] [data-testid="stBaseButton-headerNoPadding"],
+[data-testid="stExpandSidebarButton"],
 [data-testid="collapsedControl"],
 [data-testid="stSidebarCollapsedControl"] {{
     display: inline-flex !important;
     visibility: visible !important;
     opacity: 1 !important;
     width: auto !important;
+}}
+
+/* Give the toggle a real affordance. Streamlit renders a bare ~28px chevron
+   with no border or background, floating in whitespace — present but easy to
+   miss, which reads to users as "there is no collapse button". */
+[data-testid="stSidebarCollapseButton"] button,
+[data-testid="stExpandSidebarButton"] {{
+    background: {G_PALE} !important;
+    border: 1px solid {G_MID} !important;
+    border-radius: 8px !important;
+    width: 34px !important;
+    height: 34px !important;
+    color: {G_DARK} !important;
+    box-shadow: 0 1px 4px rgba(0,48,135,.18) !important;
+    transition: background .15s, color .15s;
+}}
+[data-testid="stSidebarCollapseButton"] button:hover,
+[data-testid="stExpandSidebarButton"]:hover {{
+    background: {G_MID} !important;
+    color: {WHITE} !important;
+}}
+[data-testid="stSidebarCollapseButton"] button svg,
+[data-testid="stExpandSidebarButton"] svg {{
+    width: 20px !important;
+    height: 20px !important;
+}}
+/* When collapsed, the re-open control sits over the page — keep it above
+   content and clear of the top edge. */
+[data-testid="stExpandSidebarButton"] {{
+    z-index: 999999 !important;
 }}
 
 /* The "Analyst & Audit" expander toggle inside the sidebar. */
