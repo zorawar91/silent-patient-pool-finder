@@ -309,32 +309,46 @@ button[data-baseweb="tab"][aria-selected="true"] {{
     border-bottom-color:transparent;
 }}
 
-/* ── Sidebar: always visible, non-collapsible ── */
-[data-testid="stSidebar"] {{
-    min-width: 17rem !important;
-    transform: none !important;
-    visibility: visible !important;
-    display: block !important;
-    margin-left: 0 !important;
-}}
-[data-testid="stSidebar"][aria-expanded="false"] {{
-    min-width: 17rem !important;
-    transform: none !important;
-    margin-left: 0 !important;
-}}
-/* Hide ALL sidebar control buttons — collapse arrow, header buttons, etc. */
-[data-testid="stSidebar"] button,
+/* ── Sidebar: expanded by default, collapsible on every screen size ──────────
+   Previously pinned open: forced min-width/transform plus a blanket
+   `[data-testid="stSidebar"] button {{ display:none }}` that killed the collapse
+   control. On a phone Streamlit had already set aria-expanded="false" — it
+   wanted to collapse — but those overrides kept the panel rendered at 272px of
+   a 375px viewport with no way to dismiss it. Streamlit's native collapse /
+   expand is now left intact; we only style it. */
+
+/* Streamlit's own collapse toggle must stay visible and clickable. */
+[data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebarCollapseButton"] > button,
+[data-testid="stSidebar"] [data-testid="stBaseButton-headerNoPadding"],
 [data-testid="collapsedControl"],
 [data-testid="stSidebarCollapsedControl"] {{
-    display: none !important;
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    width: auto !important;
 }}
-/* …but keep the "Analyst & Audit" expander toggle clickable (the rule above
-   is deliberately broad; this re-enables just the expander header). */
+
+/* The "Analyst & Audit" expander toggle inside the sidebar. */
 [data-testid="stSidebar"] [data-testid="stExpander"] summary,
 [data-testid="stSidebar"] [data-testid="stExpander"] details > summary,
 [data-testid="stSidebar"] [data-testid="stExpander"] button {{
     display: flex !important;
     visibility: visible !important;
+}}
+
+/* Desktop: comfortable fixed width while open (nav is always in reach). */
+@media (min-width: 768px) {{
+    [data-testid="stSidebar"][aria-expanded="true"] {{
+        min-width: 17rem !important;
+    }}
+}}
+
+/* Mobile: never force the panel open, and tighten page padding so the
+   dashboard uses the full width once the sidebar is dismissed. */
+@media (max-width: 767px) {{
+    [data-testid="stSidebar"] {{ min-width: 0 !important; }}
+    .block-container {{ padding: 1rem 0.9rem !important; }}
 }}
 
 /* ── Fix: force sidebar text visible regardless of Streamlit theme ── */
