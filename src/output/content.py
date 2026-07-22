@@ -143,12 +143,12 @@ METRIC_TOOLTIPS = {
     "condition_t2d":
         "Type 2 Diabetes — approximately 8.7 million estimated undiagnosed adults nationally. "
         "NHANES 2021–2023: 28.5% of all Type 2 Diabetes cases are undiagnosed nationally, ranging 24.9%–36.1% by age band. "
-        "Priority counties are those with a geography risk score of 55 or above.",
+        "Priority counties are those with a geography risk score of 55 or above. The headline figure on this card is OUR estimate, summed from county-level data, so the three condition cards add up to the national banner total. The published national estimate is shown beneath it for comparison; the two differ because definitions and vintages differ.",
     "condition_htn":
         "Hypertension (high blood pressure) — approximately 34.9 million estimated undiagnosed "
         "or uncontrolled adults nationally. Around 20% of people with hypertension are unaware "
         "of their diagnosis. Hypertension frequently co-occurs with Type 2 Diabetes, "
-        "increasing the combined screening opportunity.",
+        "increasing the combined screening opportunity. The headline figure is OUR computed estimate (undiagnosed only). The published ~34.9M counts undiagnosed OR uncontrolled hypertension — a broader definition — which is why it is larger.",
     "condition_hypo":
         "Hypothyroidism — approximately 2.1 million estimated undiagnosed adults nationally; "
         "research suggests around 50% of cases remain undiagnosed. "
@@ -156,7 +156,7 @@ METRIC_TOOLTIPS = {
         "this condition's geography ranking is a PROXY built from the Diagnosis Gap (60%) "
         "and Access to Care (40%) dimensions — where detection systems fail generally, "
         "thyroid detection fails too. Treat as directional until a thyroid-specific "
-        "data source (e.g. lab-ordering data) is integrated.",
+        "data source (e.g. lab-ordering data) is integrated. The headline figure is OUR computed estimate. It exceeds the published ~2.1M because we apply a flat 4% national prevalence to every county's adult population; no county-level thyroid data exists, so treat this condition as the least precise of the three.",
     "program_mix":
         "Recommended program type for each county, derived from its scoring profile. "
         "Counties with high Medicare Advantage enrollment are best suited to payer partnership programs. "

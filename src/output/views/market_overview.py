@@ -34,8 +34,9 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
       <div class="banner-title">Total Estimated Undiagnosed Patient Pool — United States</div>
       <div class="banner-stat">{total_pool/1_000_000:.1f}M</div>
       <div class="banner-note">
-        Across Type 2 Diabetes, Hypertension &amp; Hypothyroidism ·
-        Scored via 7-Dimension framework ·
+        Across Type 2 Diabetes, Hypertension &amp; Hypothyroidism · summed from
+        all {len(scores):,} counties (adult population × prevalence × NHANES
+        age-weighted undiagnosis rate) ·
         {priority_n:,} Priority + {emerging_n:,} Emerging counties identified
       </div>
     </div>""", unsafe_allow_html=True)
@@ -52,7 +53,16 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
 
     st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
 
-    # Condition cards
+    # Condition cards.
+    # The headline is OUR computed pool for that condition, so the three cards
+    # sum exactly to the banner total. Previously these showed published
+    # national estimates (8.7M/34.9M/2.1M = 45.7M) beside a computed banner
+    # (33.7M) — two different measurement systems on one screen, with
+    # hypertension alone appearing to exceed the stated total. The published
+    # figure is kept as labelled context, since it is a broader definition
+    # (HTN counts "undiagnosed OR uncontrolled") and is useful comparison.
+    _POOL_COL = {"t2d": "est_pool_t2d", "htn": "est_pool_htn",
+                 "hyperthyroidism": "est_pool_hypo"}
     col1, col2, col3 = st.columns(3)
     _cond_tip_keys = {"t2d": "condition_t2d", "htn": "condition_htn", "hyperthyroidism": "condition_hypo"}
     for col, (ckey, meta) in zip([col1, col2, col3], COND_META.items()):
@@ -60,13 +70,19 @@ def view_market_overview(scores: pd.DataFrame, scores_long: pd.DataFrame,
         high_risk = int((proxy >= 55).sum())
         avg_risk  = proxy.mean()
         peak_risk = f"{proxy.max():.0f}"
-        est_pool  = f"{meta['national_pool']/1_000_000:.1f}M"
+        pool_col  = _POOL_COL[ckey]
+        computed  = int(scores[pool_col].sum()) if pool_col in scores.columns else None
+        est_pool  = (f"{computed/1_000_000:.1f}M" if computed
+                     else f"{meta['national_pool']/1_000_000:.1f}M")
+        published = f"{meta['national_pool']/1_000_000:.1f}M"
         col.markdown(f"""
         <div class="card" style="border-top:3px solid {meta['color']};">
           <div class="label">{meta['label']}</div>
           {_iicon(METRIC_TOOLTIPS[_cond_tip_keys[ckey]])}
           <div class="big-num">{est_pool}</div>
-          <div class="sub" style="color:{meta['color']};">estimated undiagnosed nationally</div>
+          <div class="sub" style="color:{meta['color']};">our estimate, summed from counties</div>
+          <div style="font-size:.67rem;color:{MUTED};margin-top:.15rem;">
+            published national estimate: {published}</div>
           <hr style="border:none;border-top:1px solid {BORDER};margin:.7rem 0;">
           <div style="display:flex;gap:1rem;">
             <div>
