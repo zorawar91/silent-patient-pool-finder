@@ -12,6 +12,7 @@ requests>=2.31      # HTTP client
 
 # Feature engineering
 scikit-learn>=1.4
+scipy>=1.10        # validation stats (Spearman/Kendall, bootstrap) — direct import, not transitive
 
 # ML model (legacy pipeline: run.py → src/model/train.py + src/model/score.py)
 # Not used by the real-data pipeline (ingest_real_data.py + dimension_scorer.py).
