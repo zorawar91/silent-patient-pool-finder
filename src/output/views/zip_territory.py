@@ -156,7 +156,7 @@ def _render_zip_map(df: pd.DataFrame, score_col: str):
             bgcolor="white",
         ),
     )
-    st.plotly_chart(fig, use_container_width=True)
+    _stplot(fig, use_container_width=True)   # route through the chart system
 
     st.markdown(f"""<div style="font-size:.71rem;color:{MUTED};margin-top:-.5rem;">
       {len(plot_df):,} ZCTAs shown · sized by estimated undiagnosed pool · colored by Opportunity Score

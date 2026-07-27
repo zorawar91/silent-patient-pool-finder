@@ -1,3 +1,88 @@
+# Theme — SPPF Dashboard
+
+Framework: **Streamlit** (Python), no JS build. CSS approach: a single global stylesheet
+string injected once via `st.markdown(..., unsafe_allow_html=True)` from
+`src/output/theme.py::inject_css()`. There is no Tailwind, no CSS modules, no
+`globals.css`. Design tokens are Python constants interpolated into that f-string.
+
+## Part 1 — Compact token summary
+
+### Color palette (IQVIA blue system)
+| Token | Value | Role |
+|---|---|---|
+| `G_DARK` | `#003087` | IQVIA deep navy — headings, emphasis numbers |
+| `G_MID` | `#0077C8` | IQVIA medium blue — primary/accent (also `BLUE`) |
+| `G_LIGHT` | `#00A9E0` | light cyan-blue — sub-labels, accent rules |
+| `G_PALE` | `#DEEEF9` | pale blue — tinted surfaces, developing pill |
+| `WHITE` | `#FFFFFF` | card surface, sidebar |
+| `BG` | `#F0F6FC` | page background, table header fill |
+| `BORDER` | `#C8DDEF` | blue-tinted 1px borders, track fills |
+| `MUTED` | `#5A7A9B` | blue-grey secondary text |
+| `DARK` | `#0A1F3C` | near-black navy — body text |
+| `AMBER` | `#F59E0B` | Emerging tier / warning |
+| `RED` | `#EF4444` | Priority tier / critical |
+| `PURPLE` | `#8B5CF6` | Medicaid, community programs |
+
+Chart axis greys (set in `_stplot`): line `#CACFD6`, grid `#EAEDF0`.
+
+7-dimension series colors (`DIM_COLORS`):
+`disease_burden #E76F51` · `diagnosis_gap #E63946` · `access_to_care #457B9D` ·
+`social_determinants #8338EC` · `payer_landscape #2A9D8F` ·
+`commercial_readiness #F4A261` · `trajectory #60A5FA`
+
+Condition colors (`COND_META`): T2D `#E76F51` · Hypertension `#3B82F6` · Hypothyroidism `#2A9D8F`
+
+Tier pills: Priority `#FEE2E2` bg / `#991B1B` text · Emerging `#FEF3C7` / `#92400E` ·
+Developing `#DEEEF9` / `#003087`.
+
+### Streamlit base theme (`.streamlit/config.toml`) — pinned light
+`base=light`, `primaryColor #0077C8`, `backgroundColor #FFFFFF`,
+`secondaryBackgroundColor #F0F6FC`, `textColor #0A1F3C`.
+**The whole design assumes a light base**; it is pinned deliberately because
+following the viewer's OS dark mode produced unreadable expander headers.
+
+### Typography
+Family: `sans-serif` (Streamlit default stack); charts pinned to `sans-serif`, size 11.
+Type scale actually used:
+- `.banner-stat` 2.4rem / 900
+- `.big-num`, `.big-num-w` 2rem / 800
+- card headline (county name) 1.05–1.35rem / 800–900
+- `.sec-head` 1rem / 700 · `.banner-title` 1rem / 700
+- `.tbl` body .83rem · `.snum` .79rem · `.dim-name` .73rem / 600
+- `.sec-sub`, `.sub*` .74–.76rem · `.label` .7rem / 700 · tooltip .72rem
+- `.tbl th` .67rem / 700 · card eyebrow .66rem / 700, letter-spacing .04em
+
+### Spacing / layout
+- `.block-container`: padding `1.5rem 2.2rem`, `max-width: 1600px`
+- mobile (`max-width:767px`): padding `1rem .9rem`
+- card padding `.8rem 1rem`; banner padding `1.4rem 2rem`
+- desktop sidebar (`min-width:768px`) fixed `min-width: 17rem` when expanded
+
+### Radii & elevation
+- card / `.card-dark` / `.card-blue`: `10px`; banner `16px`; expander & sidebar toggle `8px`
+- pill `20px`; score-bar track `3px`; dim bar `4px`; tooltip `10px`
+- card shadow `0 1px 2px rgba(0,0,0,.04)`
+- tooltip shadow `0 8px 28px rgba(0,0,0,.35)`
+- info badge shadow `0 1px 5px rgba(0,119,200,.35)` → hover `0 3px 10px rgba(0,119,200,.55)`
+
+### Breakpoints
+Only two, both in `inject_css()`: `min-width: 768px` (desktop sidebar width) and
+`max-width: 767px` (mobile: sidebar not forced open, tighter page padding).
+
+### Gradients
+- `.banner`: `linear-gradient(135deg, #003087 0%, #0077C8 55%, #00A9E0 100%)`
+- `.card-dark`: `linear-gradient(135deg, #003087, #0077C8)`
+- `.card-blue`: `linear-gradient(135deg, #1E3A5F, #2D6A9F)`
+- `.info-tip`: `linear-gradient(135deg, #0077C8, #00A9E0)`
+
+### Chrome hidden
+`#MainMenu, footer, header { visibility:hidden; }` — Streamlit's own chrome is
+suppressed; the sidebar collapse control is explicitly re-shown and restyled.
+
+## Part 2 — Raw source
+
+### `src/output/theme.py` (tokens + full stylesheet)
+```python
 from __future__ import annotations
 # Design tokens, shared metadata dicts, CSS, and small presentation helpers
 # for the SPPF dashboard. No data logic lives here.
@@ -19,10 +104,6 @@ AMBER    = "#F59E0B"
 RED      = "#EF4444"
 BLUE     = "#0077C8"   # alias
 PURPLE   = "#8B5CF6"
-
-# Chart system — the only greys any chart may use. Gridlines are deliberately
-# lighter than the card border so they never compete with content.
-CHART_GRID = "#EAEDF0"
 
 # 7-Dimension color map
 DIM_COLORS = {
@@ -112,49 +193,21 @@ def _iicon(tip: str, pos: str = "position:absolute;top:8px;right:10px;", tip_cls
 
 
 def _stplot(fig, **kwargs):
-    """
-    Single styling chokepoint for every chart in the app.
-
-    Charts previously kept Plotly's default chrome — plot frames, heavy
-    gridlines, in-plot titles duplicating the section header above them — so
-    they read as stock output next to the hand-built cards. These rules make a
-    chart look like the rest of the design system:
-
-      · no in-plot title (the .ch section header already names the chart)
-      · no plot frame; horizontal gridlines only, in the lightest border tone
-      · muted axis titles, navy tick labels, one shared font
-      · transparent paper so the chart sits flat on its card surface
-      · a consistent hover style instead of Plotly's default black box
-
-    Views may still override anything afterwards; this only sets the defaults.
-    """
-    fig.update_layout(
-        font=dict(color=DARK, family="sans-serif", size=11),
-        # Clear any in-plot title (the .ch section header names the chart).
-        # Must be an empty string — passing None makes Plotly render the
-        # literal text "undefined" via its title template.
-        title_text="",
-        paper_bgcolor="rgba(0,0,0,0)",    # sit flat on the card
-        plot_bgcolor="rgba(0,0,0,0)",
-        hoverlabel=dict(
-            bgcolor=WHITE, bordercolor=BORDER,
-            font=dict(color=DARK, family="sans-serif", size=11),
-        ),
-        legend=dict(font=dict(color=DARK, size=10)),
-    )
-    # X: no vertical gridlines — they add noise without aiding comparison.
+    """Wrapper around st.plotly_chart — applies consistent dark axis colours first."""
+    fig.update_layout(font=dict(color=DARK, family="sans-serif", size=11))
     fig.update_xaxes(
         tickfont=dict(color=DARK, size=10),
         title_font=dict(color=MUTED, size=11),
-        showline=False, showgrid=False, zeroline=False,
-        ticks="outside", tickcolor=BORDER, ticklen=4,
+        linecolor="#CACFD6",
+        gridcolor="#EAEDF0",
+        zerolinecolor="#CACFD6",
     )
-    # Y: horizontal gridlines only, in the lightest tone.
     fig.update_yaxes(
         tickfont=dict(color=DARK, size=10),
         title_font=dict(color=MUTED, size=11),
-        showline=False, zeroline=False,
-        showgrid=True, gridcolor=CHART_GRID, gridwidth=1,
+        linecolor="#CACFD6",
+        gridcolor="#EAEDF0",
+        zerolinecolor="#CACFD6",
     )
     st.plotly_chart(fig, **kwargs)
 
@@ -215,35 +268,6 @@ def inject_css() -> None:
 
 .pill {{ display:inline-block; padding:.18rem .65rem; border-radius:20px;
          font-size:.72rem; font-weight:700; }}
-
-/* ── Hierarchy: hero + secondary entity cards ────────────────────────────────
-   A row of equal-weight cards gives the eye no path. The hero carries the one
-   thing to act on; secondary cards sit at visibly lower weight so they read as
-   "also consider" rather than as peers. */
-.hero-card {{ background:linear-gradient(90deg,{WHITE} 0%,#F5FAFF 100%);
-              border:1px solid {BORDER}; border-left:4px solid {G_DARK};
-              border-radius:10px; padding:1.6rem 1.9rem;
-              box-shadow:0 4px 12px rgba(0,48,135,.08); position:relative; }}
-.hero-eyebrow {{ font-size:.66rem; font-weight:700; color:{G_DARK};
-                 letter-spacing:.1em; text-transform:uppercase; margin-bottom:.4rem; }}
-.hero-name  {{ font-size:2.6rem; font-weight:900; color:{G_DARK}; line-height:1.05; }}
-.hero-state {{ font-size:.85rem; color:{MUTED}; font-weight:500; margin-top:.1rem; }}
-.hero-score {{ font-size:4rem; font-weight:900; color:{G_DARK}; line-height:1; }}
-.hero-of    {{ font-size:1.2rem; font-weight:700; color:{MUTED}; margin-left:.25rem; }}
-.hero-pctl  {{ font-size:.7rem; color:{MUTED}; font-weight:500; margin-top:.25rem; }}
-.hero-action {{ font-size:.88rem; color:{DARK}; margin-top:1.1rem; line-height:1.5; }}
-
-/* Secondary card — same vocabulary, deliberately quieter. */
-.sec-card {{ background:{WHITE}; border:1px solid {BORDER};
-             border-left:3px solid {BORDER}; border-radius:10px;
-             padding:.75rem 1rem; box-shadow:0 1px 2px rgba(0,0,0,.04); }}
-.sec-rank  {{ font-size:.62rem; font-weight:700; color:{MUTED}; letter-spacing:.06em; }}
-.sec-name  {{ font-size:1.1rem; font-weight:800; color:{G_DARK}; line-height:1.2; }}
-.sec-state {{ font-size:.7rem; color:{MUTED}; }}
-.sec-score {{ font-size:1.6rem; font-weight:900; color:{G_DARK}; line-height:1; }}
-/* Detail that used to compete on the card face, demoted to one muted line. */
-.card-meta {{ font-size:.7rem; color:{MUTED}; margin-top:.5rem;
-              padding-top:.45rem; border-top:1px solid {BORDER}; }}
 
 .tbl {{ width:100%; border-collapse:collapse; font-size:.83rem; }}
 .tbl th {{ background:{BG}; color:{MUTED}; font-size:.67rem; font-weight:700;
@@ -507,3 +531,21 @@ button[data-baseweb="tab"][aria-selected="true"] {{
 [data-testid="stSidebar"] .stSlider label {{ color:{DARK} !important; }}
 [data-testid="stSidebar"] hr {{ border-color:{BORDER}; }}
 </style>""", unsafe_allow_html=True)
+```
+
+### `.streamlit/config.toml`
+
+```toml
+# Pin the app to a light theme.
+# All of the dashboard's custom CSS (white cards, navy text, #F0F6FC page
+# background) assumes a light base. Without this, Streamlit follows the
+# VIEWER's OS/browser dark-mode preference, which produced unreadable
+# dark-on-dark expander headers and light-on-light QA-gate text for anyone
+# whose machine is in dark mode.
+[theme]
+base = "light"
+primaryColor = "#0077C8"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F0F6FC"
+textColor = "#0A1F3C"
+```

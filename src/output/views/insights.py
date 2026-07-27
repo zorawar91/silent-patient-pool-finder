@@ -12,7 +12,7 @@ from src.output.data import (
     tier_basis_label,
 )
 from src.output.theme import (
-    AMBER, BLUE, BORDER, DARK, G_DARK, G_MID, G_PALE, INTERV_META, MUTED,
+    AMBER, BLUE, DARK, G_DARK, G_MID, G_PALE, INTERV_META, MUTED,
     PURPLE, RED, STATE_ABBREV, _iicon,
 )
 
@@ -109,46 +109,82 @@ def view_insights(scores: pd.DataFrame, scores_long: pd.DataFrame,
       <div class='sec-sub'>Highest {'composite opportunity' if condition == 'overall' else cond_label + ' risk'} scores in current filter — these are your first calls · tier = {tier_basis_label(condition, cond_label)}</div>
     </div>""", unsafe_allow_html=True)
 
-    c1, c2, c3 = st.columns(3)
-    for col_ui, (_, row) in zip([c1, c2, c3], top3.iterrows()):
-        opp    = row.get(rank_col, 0)   # the score actually being ranked on
-        pool   = int(row.get("total_estimated_pool", 0))
+    def _card_fields(row):
+        """The values both the hero and the secondary cards read."""
         interv = str(row.get("recommended_intervention", "Pharmacy-Based Screening"))
-        imeta  = INTERV_META.get(interv, {"color": G_MID, "icon": "💊", "desc": interv})
         tier   = str(row.get("_tier", "Developing"))
-        tcls   = {"Priority": "tier-priority", "Emerging": "tier-emerging"}.get(tier, "tier-developing")
-        gap    = row.get("dim_diagnosis_gap", 0)
-        gap_lbl = "Critical" if gap >= 70 else "High" if gap >= 50 else "Moderate"
-        rank   = int(row.get("priority_rank", 0)) if "priority_rank" in row.index else "—"
+        return {
+            "score":  row.get(rank_col, 0),
+            "pool":   int(row.get("total_estimated_pool", 0)),
+            "gap":    row.get("dim_diagnosis_gap", 0),
+            "interv": interv,
+            "imeta":  INTERV_META.get(interv, {"color": G_MID, "icon": "💊", "desc": interv}),
+            "tier":   tier,
+            "tcls":   {"Priority": "tier-priority",
+                       "Emerging": "tier-emerging"}.get(tier, "tier-developing"),
+            "rank":   int(row.get("priority_rank", 0)) if "priority_rank" in row.index else "—",
+        }
+
+    # ── Hero: rank #1 gets the weight, and one line saying what to do ─────────
+    hero = top3.iloc[0]
+    f    = _card_fields(hero)
+    pctl = hero.get("opportunity_percentile")
+    pctl_str = (f"{pctl:.0f}th percentile of {len(scores):,} counties"
+                if pd.notna(pctl) else f"of {len(scores):,} counties scored")
+    ma   = hero.get("ma_penetration_rate")
+    # The "why" belongs on the card face, not buried in a tooltip.
+    why  = (f"{ma*100:.0f}% Medicare Advantage penetration — the plan has a Stars "
+            f"incentive to co-fund screening." if pd.notna(ma) and f["interv"].startswith("Payer")
+            else f["imeta"].get("desc", ""))
+
+    st.markdown(f"""
+    <div class="hero-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1.5rem;">
+        <div style="min-width:0;">
+          <div class="hero-eyebrow">National rank #{f['rank']} · {f['tier']}</div>
+          <div class="hero-name">{hero['county_name']}</div>
+          <div class="hero-state">{hero.get('state_name','')}</div>
+          <div class="hero-action">
+            <span style="color:{f['imeta']['color']};font-weight:700;">
+              {f['imeta']['icon']} {f['interv']}</span>
+            <span style="color:{MUTED};"> — </span>{why}
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div><span class="hero-score">{f['score']:.0f}</span><span class="hero-of">/100</span></div>
+          <div class="hero-pctl">{pctl_str}</div>
+          <div class="hero-pctl" style="margin-top:.5rem;">
+            Est. silent pool <b style="color:{DARK};">{f['pool']:,}</b></div>
+        </div>
+      </div>
+    </div>""", unsafe_allow_html=True)
+
+    # ── Ranks 2–3: same information, deliberately quieter ────────────────────
+    st.markdown("<div style='height:.6rem'></div>", unsafe_allow_html=True)
+    sec_cols = st.columns(2)
+    for col_ui, (_, row) in zip(sec_cols, top3.iloc[1:3].iterrows()):
+        g = _card_fields(row)
         with col_ui:
             st.markdown(f"""
-            <div class="card" style="border-left:3px solid {imeta['color']};min-height:215px;">
-              <div style="font-size:.66rem;font-weight:700;color:{MUTED};letter-spacing:.04em;">
-                NATIONAL RANK #{rank}
+            <div class="sec-card">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                  <div class="sec-rank">RANK #{g['rank']}</div>
+                  <div class="sec-name">{row['county_name']}</div>
+                  <div class="sec-state">{row.get('state_name','')}</div>
+                </div>
+                <div style="text-align:right;">
+                  <div class="sec-score">{g['score']:.0f}</div>
+                  <span class="pill {g['tcls']}" style="font-size:.62rem;">{g['tier']}</span>
+                </div>
               </div>
-              <div style="font-size:1.05rem;font-weight:800;color:{G_DARK};line-height:1.25;margin:.1rem 0 .15rem;">
-                {row['county_name']}
+              <div style="font-size:.74rem;color:{g['imeta']['color']};font-weight:700;margin-top:.5rem;">
+                {g['imeta']['icon']} {g['interv']}
               </div>
-              <div style="font-size:.75rem;color:{MUTED};margin-bottom:.55rem;">{row.get('state_name','')}</div>
-              <div style="display:flex;align-items:baseline;gap:.4rem;margin-bottom:.45rem;">
-                <span class="pill {tcls}">{tier}</span>
-                <span style="font-size:1.35rem;font-weight:900;color:{G_DARK};">{opp:.0f}</span>
-                <span style="font-size:.7rem;color:{MUTED};">/100</span>
-              </div>
-              <div style="font-size:.77rem;color:{DARK};margin-bottom:.22rem;">
-                <b>Est. silent pool:</b> {pool:,}
-              </div>
-              <div style="font-size:.77rem;color:{DARK};margin-bottom:.35rem;">
-                <b>Diagnosis gap:</b> <span style="color:{RED};">{gap_lbl}</span>
-                ({gap:.0f}/100)
-              </div>
-              <div style="border-top:1px solid {BORDER};padding-top:.35rem;margin-top:.1rem;
-                          font-size:.74rem;color:{imeta['color']};font-weight:700;">
-                {imeta['icon']} {interv}
-              </div>
+              <div class="card-meta">Pool {g['pool']:,} · Diagnosis gap {g['gap']:.0f}</div>
             </div>""", unsafe_allow_html=True)
 
-    st.markdown("<div style='height:.7rem'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
 
     # ── Two-column mid section ────────────────────────────────────────────────
     col_l, col_r = st.columns(2)

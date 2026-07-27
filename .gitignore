@@ -47,3 +47,6 @@ data/scored/scores_long.parquet
 
 # Local backup copies of decks/docs — never publish
 *.backup.*
+
+# Superdesign scratch (generated HTML for canvas components)
+.superdesign/tmp/
