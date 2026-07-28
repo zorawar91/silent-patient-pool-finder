@@ -5,13 +5,59 @@ how it works, and how it was built. Roughly **12–15 minutes** spoken, with the
 technical depth in clearly-marked blocks you can skip or expand depending on the
 room.
 
-**How it differs from the demo script:** [EXEC_DEMO_SCRIPT.md](EXEC_DEMO_SCRIPT.md)
-drives the live product in 8 minutes across 3 views. This one explains the
-*thinking* and works with or without a screen.
+**Three scripts, three lengths — pick by the time you're given:**
+
+| Length | Script | Use when |
+|---|---|---|
+| **60 seconds** | §0 below | Screen is up, you have a minute to orient the room |
+| **8 minutes** | [EXEC_DEMO_SCRIPT.md](EXEC_DEMO_SCRIPT.md) | Driving the live product across 3 views |
+| **12–15 minutes** | this document, Parts 1–4 | Explaining the thinking, with or without a screen |
 
 **Golden rule for this room:** every number below is real and reproducible. If
 you don't know an answer, say "I'll get you the exact figure" — the whole
 credibility of this pitch rests on not overclaiming.
+
+---
+
+## PART 0 — THE 60-SECOND WALKTHROUGH
+
+*For when the screen is up and you have one minute. ~160 words. Everything
+outside brackets is spoken; brackets are what you're pointing at.*
+
+> **[Landing page — Insights & Actions, no filters applied]**
+>
+> "This is the Silent Patient Pool Finder. It scores every county in America —
+> all 3,144 — for **undiagnosed** chronic disease, using only public data. No
+> patient records, no PHI.
+>
+> **[Point at the banner]**
+> That's 33.7 million adults with diabetes, hypertension or thyroid disease who
+> don't know they have it. Twenty counties come out as Priority markets.
+>
+> **[Point at the hero card]**
+> And this is the product in one card. Starr County, Texas — number one in
+> America. Seven thousand people there are undiagnosed. But it doesn't just rank
+> it, it tells you the play: a payer partnership, because 81% of
+> Medicare-eligible residents there are in Advantage plans — so the insurer has
+> a Stars incentive to co-fund the screening.
+>
+> **[Gesture at the sidebar]**
+> Three questions, three views. **Where** to go. **Who** to call — we score
+> 411,000 prescribers into a rep call list. And **did it work** — that one
+> measures diagnosis lift like a clinical trial.
+>
+> Everything you're seeing is public data."
+
+**Delivery notes for the minute:**
+
+- **Don't click anything.** The landing page carries the whole story; a mid-minute
+  click costs ~10 seconds of reload and breaks the flow.
+- **Slow down on "seven thousand people in one county."** That's the line that
+  makes it concrete — everything before it is scaffolding.
+- **End on "public data" and stop.** It's the natural place for the first
+  question, which is exactly what you want.
+- If they remember one sentence, make it the payer line — it's the one that
+  shows the tool *reasons* rather than just ranks.
 
 ---
 
