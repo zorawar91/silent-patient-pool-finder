@@ -425,26 +425,22 @@ def _composite_score(df: pd.DataFrame) -> pd.DataFrame:
     ).astype(str)
 
     # Recommended intervention (simplified vs county — based on zip dim signals)
-    df["zip_recommended_intervention"] = df.apply(_zip_intervention, axis=1)
+    # Same rule as the county layer (percentile-calibrated), so a geography
+    # cannot be told "Payer Partnership" on the ZIP map and "Pharmacy" on the
+    # county map. ZIP has no commercial-rate column, so that gate simply never
+    # fires here and those ZIPs fall through to the later gates.
+    from src.features.dimension_scorer import recommend_interventions
+    df["zip_recommended_intervention"] = recommend_interventions(df, {
+        "payer": "zip_dim_payer_landscape",
+        "sdoh": "zip_dim_social_determinants",
+        "access": "zip_dim_access_to_care",
+        "commercial": "commercial_rate",
+        "broadband": "broadband_access_rate",
+        "ma": "ma_penetration_rate",
+        "rural": "is_rural",
+    })
 
     return df
-
-
-def _zip_intervention(row: pd.Series) -> str:
-    ma  = row.get("ma_penetration_rate", 0.44) or 0.44
-    sdh = row.get("zip_dim_social_determinants", 50) or 50
-    com = row.get("zip_dim_commercial_readiness", 50) or 50
-    acc = row.get("zip_dim_access_to_care", 50) or 50
-
-    if ma >= 0.45:
-        return "Payer Partnership Program"
-    if sdh >= 65 and acc <= 45:
-        return "Community Health Center Partnership"
-    if com >= 60:
-        return "Employer Wellness Program"
-    if com >= 45:
-        return "Digital Health Program"
-    return "Pharmacy-Based Screening"
 
 
 def _estimate_pool(df: pd.DataFrame) -> pd.DataFrame:

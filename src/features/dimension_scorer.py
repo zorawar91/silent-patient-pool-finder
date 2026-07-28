@@ -96,7 +96,12 @@ def compute_all_dimensions(
     )
 
     # Recommended intervention
-    df["recommended_intervention"] = df.apply(_recommend_intervention, axis=1)
+    df["recommended_intervention"] = recommend_interventions(df, {
+        "payer": "dim_payer_landscape", "sdoh": "dim_social_determinants",
+        "access": "dim_access_to_care", "commercial": "commercial_rate",
+        "broadband": "broadband_access_rate", "ma": "ma_penetration_rate",
+        "rural": "is_rural",
+    })
 
     # Investment priority rank
     df["priority_rank"] = df["opportunity_score"].rank(ascending=False).astype(int)
@@ -451,37 +456,84 @@ def _dim_trajectory(df: pd.DataFrame) -> pd.DataFrame:
 
 # ── Intervention Recommendation ───────────────────────────────────────────────
 
-def _recommend_intervention(row: pd.Series) -> str:
+# ── Program-fit gates ─────────────────────────────────────────────────────────
+# Calibration principle — the reason these are two different kinds of number:
+#
+#   * A DIMENSION SCORE (0-100) is a constructed index. Its scale is an artifact
+#     of how it is built: no county leads on every sub-signal, so the composite
+#     and its parts never approach 100. dim_payer_landscape, for example, tops
+#     out at 68.7 nationally. Gating it on an absolute "≥ 65" therefore selected
+#     ONE county out of 3,144 and dumped 83% into the default — a scale bug
+#     masquerading as a recommendation. Constructed indices are gated on
+#     PERCENTILES of the observed distribution instead, so a gate means
+#     "relatively high for this measure" rather than "high on a scale the data
+#     never reaches".
+#
+#   * A REAL-WORLD RATE (MA penetration, broadband share) has meaning at a
+#     specific value — 35% MA penetration is genuine insurer scale whatever the
+#     rest of the distribution does. Those stay ABSOLUTE.
+#
+# Percentiles are computed from the panel being scored, so the same rule works
+# at county and ZIP level without re-tuning.
+PAYER_Q       = 0.75   # top quartile of payer opportunity
+SDOH_Q        = 0.75   # top quartile of social burden
+ACCESS_Q      = 0.35   # bottom third of care access
+COMMERCIAL_Q  = 0.65   # top third of commercial coverage
+MA_MIN        = 0.35   # absolute: insurer scale worth partnering with
+BROADBAND_MIN = 0.75   # absolute: telehealth is viable above this
+
+PROGRAM_PAYER     = "Payer Partnership Program"
+PROGRAM_COMMUNITY = "Community Health Center Partnership"
+PROGRAM_EMPLOYER  = "Employer Wellness Program"
+PROGRAM_DIGITAL   = "Digital Health Program"
+PROGRAM_PHARMACY  = "Pharmacy-Based Screening"
+
+
+def recommend_interventions(df: pd.DataFrame, cols: dict) -> pd.Series:
     """
-    Select the most appropriate program type based on the county's dimension profile.
-    Maps to 5 intervention types from dimensions.yaml.
+    Assign each row the program type its profile best fits.
+
+    A first-match cascade, most-specific first. `cols` maps a role to the column
+    holding it, so county and ZIP layers share one rule:
+        payer · sdoh · access · commercial · broadband · ma · rural
+
+    A missing column simply never satisfies its gate (the row falls through to
+    the default) rather than raising or silently defaulting to a magic number.
     """
-    payer   = row.get("dim_payer_landscape", 50)
-    access  = row.get("dim_access_to_care", 50)
-    sdoh    = row.get("dim_social_determinants", 50)
-    ma_rate = row.get("ma_penetration_rate", 0.3)
-    rural   = row.get("is_rural", False)
-    broadband = row.get("broadband_access_rate", 0.7)
-    commercial = row.get("commercial_rate", 0.4)
+    def num(role: str) -> pd.Series:
+        name = cols.get(role)
+        if name and name in df.columns:
+            return pd.to_numeric(df[name], errors="coerce")
+        return pd.Series(np.nan, index=df.index)
 
-    # Payer Partnership: high MA penetration, good payer incentives
-    if payer >= 65 and ma_rate >= 0.35:
-        return "Payer Partnership Program"
+    payer, sdoh, access = num("payer"), num("sdoh"), num("access")
+    commercial, broadband, ma = num("commercial"), num("broadband"), num("ma")
 
-    # Community Health: high SDoH burden, low access
-    if sdoh >= 65 and access <= 45:
-        return "Community Health Center Partnership"
+    rural_col = cols.get("rural")
+    rural = (df[rural_col].fillna(False).astype(bool)
+             if rural_col and rural_col in df.columns
+             else pd.Series(False, index=df.index))
 
-    # Employer Wellness: high commercial, urban/suburban
-    if commercial >= 0.45 and not rural:
-        return "Employer Wellness Program"
+    # Percentile gates from this panel's own distribution.
+    payer_hi  = payer.quantile(PAYER_Q)
+    sdoh_hi   = sdoh.quantile(SDOH_Q)
+    access_lo = access.quantile(ACCESS_Q)
+    comm_hi   = commercial.quantile(COMMERCIAL_Q)
+    comm_mid  = commercial.quantile(0.50)
 
-    # Digital Health: high broadband, good commercial coverage
-    if broadband >= 0.75 and commercial >= 0.40:
-        return "Digital Health Program"
+    # NaN comparisons yield False, so incomplete rows fall through to the default.
+    conditions = [
+        (payer >= payer_hi) & (ma >= MA_MIN),                 # insurer has scale + incentive
+        (sdoh >= sdoh_hi) & (access <= access_lo),            # high need, no infrastructure
+        (commercial >= comm_hi) & (~rural),                   # employer channel available
+        (broadband >= BROADBAND_MIN) & (commercial >= comm_mid),  # telehealth viable
+    ]
+    choices = [PROGRAM_PAYER, PROGRAM_COMMUNITY, PROGRAM_EMPLOYER, PROGRAM_DIGITAL]
 
-    # Default: Pharmacy-based screening
-    return "Pharmacy-Based Screening"
+    return pd.Series(
+        np.select(conditions, choices, default=PROGRAM_PHARMACY),
+        index=df.index, dtype=object,
+    )
 
 
 # ── Weight Sensitivity ────────────────────────────────────────────────────────

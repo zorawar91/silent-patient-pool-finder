@@ -19,6 +19,7 @@ from src.features.dimension_scorer import (
     compute_all_dimensions,
     estimate_undiagnosed_pool,
     load_weights,
+    recommend_interventions,
 )
 
 DIM_COLS = [
@@ -241,3 +242,76 @@ def test_pool_records_the_rate_it_actually_applied():
     out = estimate_undiagnosed_pool(df)
     assert out.loc[0, "t2d_undiagnosed_rate"] == pytest.approx(0.361, abs=1e-4)
     assert out.loc[0, "est_pool_t2d"] == round(10_000 * 0.1 * 0.361)
+
+
+# ── Program recommendation calibration ───────────────────────────────────────
+
+_REC_COLS = {
+    "payer": "dim_payer_landscape", "sdoh": "dim_social_determinants",
+    "access": "dim_access_to_care", "commercial": "commercial_rate",
+    "broadband": "broadband_access_rate", "ma": "ma_penetration_rate",
+    "rural": "is_rural",
+}
+
+
+def _rec_panel(n: int = 600, seed: int = 11) -> pd.DataFrame:
+    """Panel whose dimension scores span a REALISTIC compressed range (~20-70),
+    not the full 0-100 — this is what broke the original absolute gates."""
+    rng = np.random.default_rng(seed)
+    return pd.DataFrame({
+        "dim_payer_landscape":     rng.uniform(19, 69, n),
+        "dim_social_determinants": rng.uniform(6, 80, n),
+        "dim_access_to_care":      rng.uniform(30, 70, n),
+        "commercial_rate":         rng.uniform(0.05, 0.70, n),
+        "broadband_access_rate":   rng.uniform(0.36, 1.0, n),
+        "ma_penetration_rate":     rng.uniform(0.01, 0.88, n),
+        "is_rural":                rng.integers(0, 2, n).astype(bool),
+    })
+
+
+def test_no_program_collapses_on_a_compressed_scale():
+    """The original bug: absolute gates ('payer >= 65') against an index that
+    tops out near 69 selected 1 county in 3,144 and dumped 83% into the default.
+    Percentile gates must keep every program materially represented."""
+    rec = recommend_interventions(_rec_panel(), _REC_COLS)
+    share = rec.value_counts(normalize=True)
+    assert len(share) >= 4, f"only {len(share)} programs ever recommended: {dict(share)}"
+    assert share.max() < 0.60, f"one program dominates ({share.idxmax()} at {share.max():.0%})"
+    for prog, s in share.items():
+        assert s > 0.01, f"{prog} collapsed to {s:.2%} — gate is a scale artifact"
+
+
+def test_gates_are_relative_so_scale_shift_does_not_change_the_mix():
+    """Halving every index (same ordering, different scale) must not change the
+    distribution — that is the property absolute thresholds lacked."""
+    df = _rec_panel()
+    base = recommend_interventions(df, _REC_COLS).value_counts()
+    shifted = df.copy()
+    for c in ["dim_payer_landscape", "dim_social_determinants", "dim_access_to_care"]:
+        shifted[c] = shifted[c] / 2
+    after = recommend_interventions(shifted, _REC_COLS).value_counts()
+    assert base.reindex(after.index).equals(after), (
+        f"scale shift changed the mix:\n{base}\nvs\n{after}")
+
+
+def test_ma_gate_stays_absolute():
+    """MA penetration is a real-world rate: 35% means insurer scale regardless
+    of the distribution, so it must NOT drift with percentiles."""
+    df = _rec_panel(200)
+    df["ma_penetration_rate"] = 0.05          # nobody has insurer scale
+    df["dim_payer_landscape"] = np.linspace(19, 69, len(df))
+    rec = recommend_interventions(df, _REC_COLS)
+    assert "Payer Partnership Program" not in set(rec), \
+        "payer programme recommended despite no county reaching MA scale"
+
+
+def test_missing_columns_fall_through_to_default():
+    df = pd.DataFrame({"dim_payer_landscape": [50.0, 60.0]})   # nothing else
+    rec = recommend_interventions(df, _REC_COLS)
+    assert (rec == "Pharmacy-Based Screening").all()
+
+
+def test_recommendation_assigned_to_every_row():
+    out = compute_all_dimensions(_panel())
+    assert out["recommended_intervention"].notna().all()
+    assert out["recommended_intervention"].ne("").all()
