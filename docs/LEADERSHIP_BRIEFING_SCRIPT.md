@@ -88,6 +88,58 @@ credibility of this pitch rests on not overclaiming.
 65 by construction, because no county leads on all seven dimensions at once. The
 honest headline is the percentile: Starr outranks every other county in America."*
 
+### 2.2b How a county actually gets its score — in plain English
+
+*Use this if someone asks "but how is the analysis actually done?" It's five
+steps, and none of them are mysterious.*
+
+> **Step 1 — We build one big table.**
+> One row per county, all 3,144 of them, and we attach every public number we
+> can find about that county: disease rates, income, poverty, insurance,
+> doctors, broadband, food access. Roughly forty columns. That's it — that's
+> the raw material.
+>
+> **Step 2 — We grade on a curve.**
+> This is the one idea worth understanding, because everything else follows
+> from it. We don't score a county against some absolute standard — we score it
+> **against the rest of the country**. Highest diabetes rate in America scores
+> 100 on that measure, lowest scores 0, everyone else lands in between.
+>
+> It's a class rank, not an exam mark. 'This county is near the top of the
+> national range' — not 'this county is 90% sick.'
+>
+> **Step 3 — We build seven scores out of those ingredients, like recipes.**
+> Disease Burden, for example, is 40% diabetes rate, 25% obesity, 15% blood
+> pressure, 10% poor-health days, 10% deprivation. Each of the seven dimensions
+> is its own recipe with its own fixed proportions.
+>
+> **Step 4 — We blend the seven into one number.**
+> Diagnosis Gap counts most at 25%, then Disease Burden at 20%, Access and
+> Social Determinants at 15% each, Payer and Readiness at 10%, Trajectory at 5%.
+> That blend is the Opportunity Score. The weights sit in a config file anyone
+> can read — and in the dashboard you can drag them yourself and watch the
+> ranking barely move.
+>
+> **Step 5 — The patient count is separate, and it's just multiplication.**
+> The score tells you *where*. The pool tells you *how many*, and it involves no
+> scoring at all: adults × how common the disease is there × the published share
+> of cases that go undiagnosed. Three numbers multiplied. That's why I'm
+> comfortable defending it — there's no model to argue with."
+
+**Two things that follow from Step 2 — worth knowing before you're asked:**
+
+> **Why the best county scores 65 and not 100.** Because it's a curve. To hit
+> 100 a county would have to be worst-in-America on all seven dimensions
+> simultaneously, and no county is. That's why we lead with the percentile.
+>
+> **Why the age-weighting matters.** The share of diabetes that goes undiagnosed
+> is *higher in younger adults* — 36% for those under 40, 25% for the over-60s,
+> because older people see doctors more. So a young county hides proportionally
+> more patients. A single national average erases that; we weight by each
+> county's actual age mix. It's a small change that moved the national number
+> from 39 million to 33.7 million — we report it going down because it's more
+> defensible, not less impressive.
+
 ### 2.3 How the program recommendation is decided
 
 > "It's a transparent rule cascade, not a black box — five program types
@@ -232,6 +284,8 @@ Payer Partnership 784 · Employer Wellness 236 · Community Health 192.**
 | **"Hasn't someone built this?"** | The components exist in three separate worlds; the combination doesn't. Cite it proactively: a 2016 *Diabetes Care* study estimated county-level undiagnosed diabetes and found diagnosis rates ranging 59–80% across counties. That's independent peer-reviewed proof our premise is real. It stops at 2012 data; we operationalise it on current vintages and add the payer, readiness and measurement layers. |
 | **"How accurate is the 33.7M?"** | It's a planning estimate with a transparent chain, not a precision claim. Population × prevalence × published undiagnosis rate, county by county. Don't confuse it with the published 45M national figure — that counts hypertension "undiagnosed *or uncontrolled*", a broader definition. |
 | **"What's the weakest part?"** | Hypothyroidism. No county-level thyroid data exists anywhere, so we apply a flat national prevalence. It's the least precise of the three conditions and it's labelled as such in the product. Lead with diabetes and hypertension. |
+| **"Who decided the weights? Where did 40% for diabetes come from?"** | Clinical and commercial judgment, not data — and I'd rather say that plainly. We tested the seven top-level weights hard: shake them ±25% and 96% of the top 20 counties stay put, so the ranking is driven by the data rather than by our weighting. What we have **not** individually tested is the proportions *inside* each dimension — the 40/25/15/10/10 kind of number. There are about thirty of those. They're documented, inspectable and changeable, and validating them is on the list. |
+| **"Is a score of 65 good? What does it mean?"** | On its own, nothing — it's a curve, not a percentage. It means Starr sits at the top of the national range across seven dimensions at once. The number to quote is the percentile: 100th of 3,144 counties. |
 | **"Is any of this modeled rather than measured?"** | Yes, and it's disclosed in the product. Medicare Advantage penetration is real CMS data. Medicaid and commercial shares are modeled from socioeconomic signals — directionally sound planning figures, not sourced rates. |
 | **"Could a client just build this themselves?"** | Technically yes — the data is public. But the moat isn't the data, it's the scoring framework, the validation spine, and the measurement engine. And it's a $25–75k assessment versus a year of internal analyst time. |
 | **"What does it cost to run?"** | Effectively nothing. No licences, no cloud data platform, no AI inference costs. The whole dataset is 120MB. |
